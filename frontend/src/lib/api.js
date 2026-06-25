@@ -28,6 +28,7 @@ export const deleteMeeting = (id) => api.delete(`/meetings/${id}`).then((r) => r
 export const getTrends = () => api.get("/analytics/trends").then((r) => r.data);
 export const extractFile = (formData) =>
   api.post("/extract", formData, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data);
+export const getExtractStatus = (jobId) => api.get(`/extract/${jobId}`).then((r) => r.data);
 
 // users
 export const listUsers = () => api.get("/users").then((r) => r.data);

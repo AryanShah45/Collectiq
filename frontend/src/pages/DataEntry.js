@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
-import { getMeeting, createMeeting, updateMeeting, extractFile, formatApiError } from "@/lib/api";
+import { getMeeting, createMeeting, updateMeeting, extractFile, getExtractStatus, formatApiError } from "@/lib/api";
 import { emptyRep, emptyQuotation, formatINR, meetingKpis } from "@/lib/calc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -160,20 +160,29 @@ export default function DataEntry() {
     setUploading(true);
     const fd = new FormData();
     fd.append("file", file);
+    toast.info("Reading your file with AI — this can take up to a minute.");
     try {
-      const res = await extractFile(fd);
-      const d = res.data || {};
+      const start = await extractFile(fd);
+      const jobId = start.job_id;
+      let data = null;
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const job = await getExtractStatus(jobId);
+        if (job.status === "done") { data = job.data || {}; break; }
+        if (job.status === "error") { throw new Error(job.error || "Extraction failed"); }
+      }
+      if (!data) throw new Error("Extraction timed out. Please try a smaller file or enter manually.");
       setForm((prev) => ({
         ...prev,
-        meeting_date: d.meeting_date || prev.meeting_date,
-        period_start: d.period_start || prev.period_start,
-        period_end: d.period_end || prev.period_end,
-        reps: (d.reps?.length ? d.reps : prev.reps).map(normalizeRep),
-        quotation: normalizeQuotation(d.quotation),
+        meeting_date: data.meeting_date || prev.meeting_date,
+        period_start: data.period_start || prev.period_start,
+        period_end: data.period_end || prev.period_end,
+        reps: (data.reps?.length ? data.reps : prev.reps).map(normalizeRep),
+        quotation: normalizeQuotation(data.quotation),
       }));
-      toast.success(`Extracted ${d.reps?.length || 0} representatives — review & save`);
+      toast.success(`Extracted ${data.reps?.length || 0} representatives — review & save`);
     } catch (err) {
-      toast.error(formatApiError(err.response?.data?.detail) || "Extraction failed");
+      toast.error(err.message || formatApiError(err.response?.data?.detail) || "Extraction failed");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";

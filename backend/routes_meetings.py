@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone, date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 
 from db import db
@@ -10,6 +10,13 @@ from auth import get_current_user, require_admin
 import extraction
 import os
 import tempfile
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
 
 meetings_router = APIRouter(prefix="/api", tags=["meetings"])
 
@@ -209,21 +216,51 @@ async def trends(_: dict = Depends(get_current_user)):
     return {"weekly": weekly, "monthly": monthly}
 
 
-@meetings_router.post("/extract")
-async def extract_file(file: UploadFile = File(...), _: dict = Depends(require_admin)):
-    filename = file.filename or "upload"
+async def _run_extraction(job_id: str, content: bytes, filename: str):
     suffix = os.path.splitext(filename)[1] or ".bin"
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
-        content = await file.read()
         tmp.write(content)
         tmp.close()
         data = await extraction.extract_meeting(tmp.name, filename)
-        return {"ok": True, "data": data}
+        await db.extract_jobs.update_one(
+            {"id": job_id},
+            {"$set": {"status": "done", "data": data, "updated_at": _now_iso()}},
+        )
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Extraction failed: {exc}")
+        logger.error("Extraction job %s failed: %s", job_id, exc)
+        await db.extract_jobs.update_one(
+            {"id": job_id},
+            {"$set": {"status": "error",
+                      "error": "We couldn't read this file. Please check it's a valid meeting PDF/Excel and try again.",
+                      "updated_at": _now_iso()}},
+        )
     finally:
         try:
             os.unlink(tmp.name)
         except Exception:
             pass
+
+
+@meetings_router.post("/extract")
+async def extract_file(background: BackgroundTasks, file: UploadFile = File(...),
+                       admin: dict = Depends(require_admin)):
+    content = await file.read()
+    job_id = str(uuid.uuid4())
+    await db.extract_jobs.insert_one({
+        "id": job_id,
+        "status": "processing",
+        "filename": file.filename or "upload",
+        "created_by": admin.get("email"),
+        "created_at": _now_iso(),
+    })
+    background.add_task(_run_extraction, job_id, content, file.filename or "upload")
+    return {"job_id": job_id, "status": "processing"}
+
+
+@meetings_router.get("/extract/{job_id}")
+async def extract_status(job_id: str, _: dict = Depends(require_admin)):
+    job = await db.extract_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Extraction job not found")
+    return job
