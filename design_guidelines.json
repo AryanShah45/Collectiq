@@ -1,0 +1,98 @@
+{
+  "theme": "light",
+  "archetype": "Archetype 4 (Swiss & High-Contrast)",
+  "design_philosophy": "Objective, rigid, and functional. Color exists only to guide action. High contrast for readability of dense financial data. Balance-first design with top-down hierarchy.",
+  "colors": {
+    "background": "#F8F9FA",
+    "surface": "#FFFFFF",
+    "primary": "#000000",
+    "secondary": "#E9ECEF",
+    "text_primary": "#111827",
+    "text_secondary": "#6B7280",
+    "border": "#DEE2E6",
+    "accents": {
+      "danger_90_days": "#DC2626",
+      "warning_60_days": "#F59E0B",
+      "caution_45_days": "#D97706",
+      "info_30_days": "#2563EB",
+      "success": "#16A34A"
+    }
+  },
+  "typography": {
+    "font_family_headings": "IBM Plex Sans",
+    "font_family_body": "IBM Plex Sans",
+    "font_family_mono": "IBM Plex Mono",
+    "h1": "text-4xl tracking-tighter font-semibold text-gray-900",
+    "h2": "text-2xl tracking-tight font-medium text-gray-900",
+    "h3": "text-lg font-medium text-gray-900",
+    "h4": "text-base font-medium text-gray-900",
+    "body": "text-sm text-gray-600 leading-relaxed",
+    "metrics": "font-mono tabular-nums tracking-tight",
+    "labels": "text-xs font-semibold uppercase tracking-[0.2em] text-gray-500"
+  },
+  "layout": {
+    "strategy": "The 'Control Room' Grid",
+    "container": "max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8",
+    "grid_gap": "gap-6",
+    "card_padding": "p-6",
+    "border_radius": "rounded-md",
+    "surfaces": "Flat backgrounds with 1px solid border (border-gray-200), no shadows by default. Hover states introduce subtle -translate-y-1 and shadow-sm."
+  },
+  "components": {
+    "navigation": "Sticky top nav (backdrop-blur-xl bg-white/70) with solid bottom border. Includes Logo, context switcher (MBS vs MCORP), and Admin/Viewer role indicator.",
+    "kpi_cards": "Grid cols-1 md:grid-cols-2 lg:grid-cols-4. Flat borders, no shadows. Large font-mono for numbers. Badge indicators for MoM/WoW trends.",
+    "tables": "Shadcn tables. Striped rows or border-b only. text-sm font-mono for monetary values. Color-coded badges for aging buckets.",
+    "charts": "Recharts via Shadcn. Use sorted horizontal bar charts for leaderboard. Stacked bar charts for Aging Analysis (MBS vs MCORP).",
+    "forms": "Data Entry Forms using Shadcn Input, Select. Left-aligned labels. Sharp borders.",
+    "badges": "Minimalist badges. Solid background for critical (90 days), subtle background with strong text for others.",
+    "buttons": "Primary: bg-black text-white rounded-md. Secondary: bg-gray-100 text-gray-900 border border-gray-200 rounded-md."
+  },
+  "animations": {
+    "hover": "transition-transform duration-200 ease-out",
+    "interaction": "Micro-interactions on buttons and table rows (hover:bg-gray-50).",
+    "page_load": "Staggered fade-up for grid items to reduce cognitive load on initial render."
+  },
+  "accessibility": {
+    "contrast": "Ensure all text meets minimum 4.5:1 ratio. Warning/Danger colors must use sufficiently dark hues against white surfaces.",
+    "data_ink_ratio": "Remove redundant grid lines in charts. Use non-color cues (icons + text) for risk alerts.",
+    "testing_attributes": "All interactive elements MUST use data-testid (e.g., data-testid='upload-pdf-button', data-testid='kpi-total-outstanding')"
+  },
+  "media": {
+    "logos": [
+      {
+        "url": "https://images.unsplash.com/photo-1600868748980-84f0fe9c0ee6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwzfHxzaW1wbGUlMjBnZW9tZXRyaWMlMjBsb2dvfGVufDB8fHx3aGl0ZXwxNzgyMzkyMzIxfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Black and white abstract geometric logo for the brand",
+        "category": "brand_logo"
+      }
+    ],
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1558730234-d8b2281b0d00?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdHxlbnwwfHx8YmxhY2tfYW5kX3doaXRlfDE3ODIzOTIzMjF8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional avatar 1",
+        "category": "sales_rep_avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1542190891-2093d38760f2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdHxlbnwwfHx8YmxhY2tfYW5kX3doaXRlfDE3ODIzOTIzMjF8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional avatar 2",
+        "category": "sales_rep_avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/flagged/photo-1595514191830-3e96a518989b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdHxlbnwwfHx8YmxhY2tfYW5kX3doaXRlfDE3ODIzOTIzMjF8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional avatar 3",
+        "category": "sales_rep_avatar"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Use Javascript (.js) and standard React patterns. Do not use TypeScript (.tsx).",
+    "Use IBM Plex Sans for general text and IBM Plex Mono for all numeric/metric fields to ensure tabular alignment.",
+    "Implement the 'Control Room' Grid: Use dense, flat surfaces (max 8px border radius) with sharp 1px borders. Do not overuse drop shadows.",
+    "Data visualization: Use Recharts for the Accounts Receivable Aging Analysis. Make it a stacked bar chart showing 30, 45, 60, and 90 days. Map 90 days to red (#DC2626), 60 days to amber (#F59E0B), 45 days to orange (#D97706), and 30 days to blue (#2563EB).",
+    "Sales Rep Leaderboard: Display as a table or list with avatars (use provided media URLs). Rank by collection %.",
+    "Quotation Pipeline Funnel: Display as a structured metric strip or a custom horizontal funnel using purely HTML/Tailwind.",
+    "Include 'data-testid' attributes on all key informational and interactive elements for testing.",
+    "Do NOT use HTML native date pickers or select dropdowns. Use Shadcn Select and Calendar components instead.",
+    "The UI should look like a highly professional, authoritative internal tool. Keep decorative elements minimal. The focus is strictly on data clarity and contrast.",
+    "Install and use phosphor-icons for dashboard iconography, as it is standard for dense professional UI tools."
+  ]
+}
