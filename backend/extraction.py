@@ -6,9 +6,8 @@ import pandas as pd
 from emergentintegrations.llm.chat import FileContentWithMimeType, LlmChat, UserMessage
 
 EXTRACTION_SYSTEM = """You are a precise financial data extraction engine for a company's weekly \
-collection & sales meeting report. You are given a document (PDF / CSV) that contains, per sales \
-representative, the OUTSTANDING COLLECTION amounts split into aging buckets (90 days, 60 days, 30 days) \
-across two separate companies named MBS and MCORP, plus performance numbers and a quotation pipeline.
+collection, sales & marketing meeting report. The document contains data split across TWO companies \
+named MBS and MCORP. Extract everything into the exact JSON schema below.
 
 Return ONLY valid minified JSON (no markdown, no commentary) matching EXACTLY this schema:
 {
@@ -17,21 +16,23 @@ Return ONLY valid minified JSON (no markdown, no commentary) matching EXACTLY th
   "period_end": "YYYY-MM-DD or empty string",
   "reps": [
     {
-      "name": "string",
+      "name": "string (collection person)",
       "aging": {
         "d90": {"mbs": number, "mcorp": number},
         "d60": {"mbs": number, "mcorp": number},
         "d30": {"mbs": number, "mcorp": number},
         "othera": {"mbs": number, "mcorp": number}
       },
-      "performance": {
-        "purchase": {"mbs": number, "mcorp": number},
-        "sales": {"mbs": number, "mcorp": number},
-        "coll_per_day": number,
-        "coll_pct": number,
-        "new_target": number,
-        "last_week_target": number
-      }
+      "weekly_collection": number,
+      "last_week_target": number,
+      "working_days": 6
+    }
+  ],
+  "branches": [
+    {
+      "name": "string (e.g. Sachin, Ankleshwar, Udhna, Kadodra)",
+      "purchase": {"value": {"mbs": number, "mcorp": number}, "tons": {"mbs": number, "mcorp": number}},
+      "sales":    {"value": {"mbs": number, "mcorp": number}, "tons": {"mbs": number, "mcorp": number}}
     }
   ],
   "quotation": {
@@ -40,14 +41,25 @@ Return ONLY valid minified JSON (no markdown, no commentary) matching EXACTLY th
     "pending": {"mbs": number, "mcorp": number},
     "under_process": {"mbs": number, "mcorp": number},
     "not_conform": {"mbs": number, "mcorp": number}
-  }
+  },
+  "marketing_reps": [
+    {
+      "name": "string (marketing person)",
+      "visit": {"mbs": number, "mcorp": number},
+      "inquiry": {"mbs": number, "mcorp": number},
+      "inquiry_conform": {"mbs": number, "mcorp": number},
+      "order_loss": {"mbs": number, "mcorp": number}
+    }
+  ]
 }
 
 Rules:
-- All numbers must be plain numbers (no commas, no currency symbols, no quotes).
-- If a value is missing, use 0. If dates are missing, use "".
-- "othera" means the OTHER / miscellaneous collection bucket if present, else all 0.
-- Do not invent representatives that are not in the document.
+- All numbers must be plain numbers (no commas, currency symbols or quotes). Missing -> 0. Missing dates -> "".
+- "othera" is the OTHER / miscellaneous collection bucket (accounts not in 30/60/90 days).
+- "weekly_collection" is the amount that person collected during the week (if only a per-day figure is shown, multiply it by the number of working days, usually 6).
+- For branches, capture BOTH the rupee value AND the tonnage (tons) where available, split by MBS and MCORP.
+- Quotation values are COUNTS of quotations per stage. Marketing rep values are COUNTS of visits/inquiries.
+- Do not invent people or branches that are not present in the document.
 """
 
 

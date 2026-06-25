@@ -24,37 +24,27 @@ export function formatINR(n) {
   return `${sign}₹${x.toFixed(0)}`;
 }
 
-export function formatCr(n) {
-  const v = Number(n) || 0;
-  return (v / 1e7).toFixed(1);
-}
-
-export function formatNum(n) {
-  return (Number(n) || 0).toLocaleString("en-IN");
-}
+export const formatCr = (n) => ((Number(n) || 0) / 1e7).toFixed(1);
+export const formatNum = (n) => (Number(n) || 0).toLocaleString("en-IN");
+export const formatTons = (n) => `${(Number(n) || 0).toFixed(2)} T`;
 
 export function meetingKpis(meeting, company) {
   const reps = meeting?.reps || [];
-  let d90 = 0, d60 = 0, d30 = 0, othera = 0;
-  let totalNewTarget = 0, totalLastTarget = 0, totalCollPerDay = 0;
-  const pcts = [];
+  let d90 = 0, d60 = 0, d30 = 0, othera = 0, collected = 0;
   reps.forEach((r) => {
     const ag = r.aging || {};
     d90 += amt(ag.d90, company);
     d60 += amt(ag.d60, company);
     d30 += amt(ag.d30, company);
     othera += amt(ag.othera, company);
-    const p = r.performance || {};
-    totalNewTarget += p.new_target || 0;
-    totalLastTarget += p.last_week_target || 0;
-    totalCollPerDay += p.coll_per_day || 0;
-    if (p.coll_pct) pcts.push(p.coll_pct);
+    collected += r.weekly_collection || 0;
   });
   const totalOutstanding = d90 + d60 + d30 + othera;
   return {
     totalOutstanding, d90, d60, d30, othera,
-    totalNewTarget, totalLastTarget, totalCollPerDay,
-    avgCollPct: pcts.length ? pcts.reduce((a, b) => a + b, 0) / pcts.length : 0,
+    collected,
+    collPct: totalOutstanding ? (collected / totalOutstanding) * 100 : 0,
+    newTarget: totalOutstanding,
     repCount: reps.length,
     d90Share: totalOutstanding ? d90 / totalOutstanding : 0,
   };
@@ -63,22 +53,43 @@ export function meetingKpis(meeting, company) {
 export function repRows(meeting, company) {
   return (meeting?.reps || []).map((r) => {
     const ag = r.aging || {};
-    const p = r.performance || {};
-    const outstanding = amt(ag.d90, company) + amt(ag.d60, company) + amt(ag.d30, company) + amt(ag.othera, company);
+    const d90 = amt(ag.d90, company), d60 = amt(ag.d60, company);
+    const d30 = amt(ag.d30, company), othera = amt(ag.othera, company);
+    const outstanding = d90 + d60 + d30 + othera;
+    const collected = r.weekly_collection || 0;
+    const wd = r.working_days || 6;
+    const lastTarget = r.last_week_target || 0;
     return {
-      name: r.name,
-      d90: amt(ag.d90, company),
-      d60: amt(ag.d60, company),
-      d30: amt(ag.d30, company),
-      othera: amt(ag.othera, company),
-      outstanding,
-      collPct: p.coll_pct || 0,
-      collPerDay: p.coll_per_day || 0,
-      newTarget: p.new_target || 0,
-      lastTarget: p.last_week_target || 0,
-      targetDelta: (p.new_target || 0) - (p.last_week_target || 0),
+      name: r.name, d90, d60, d30, othera, outstanding,
+      mbs: amt(ag.d90, "mbs") + amt(ag.d60, "mbs") + amt(ag.d30, "mbs") + amt(ag.othera, "mbs"),
+      mcorp: amt(ag.d90, "mcorp") + amt(ag.d60, "mcorp") + amt(ag.d30, "mcorp") + amt(ag.othera, "mcorp"),
+      collected,
+      collPerDay: collected / wd,
+      collPct: outstanding ? (collected / outstanding) * 100 : 0,
+      newTarget: outstanding,
+      lastTarget,
+      wowDelta: outstanding - lastTarget,
     };
   });
+}
+
+export function bucketCell(rep, bucketKey) {
+  const a = (rep.aging || {})[bucketKey] || {};
+  return { mbs: a.mbs || 0, mcorp: a.mcorp || 0, total: (a.mbs || 0) + (a.mcorp || 0) };
+}
+
+export function branchRows(meeting, company) {
+  return (meeting?.branches || []).map((b) => ({
+    name: b.name,
+    purchaseValue: amt(b.purchase?.value, company),
+    salesValue: amt(b.sales?.value, company),
+    purchaseTons: amt(b.purchase?.tons, company),
+    salesTons: amt(b.sales?.tons, company),
+    purchaseValueMbs: amt(b.purchase?.value, "mbs"),
+    purchaseValueMcorp: amt(b.purchase?.value, "mcorp"),
+    salesValueMbs: amt(b.sales?.value, "mbs"),
+    salesValueMcorp: amt(b.sales?.value, "mcorp"),
+  }));
 }
 
 export function quotationRows(meeting, company) {
@@ -93,6 +104,16 @@ export function quotationRows(meeting, company) {
   return stages.map((s) => ({ ...s, value: amt(q[s.key], company) }));
 }
 
+export function marketingRepRows(meeting, company) {
+  return (meeting?.marketing_reps || []).map((m) => ({
+    name: m.name,
+    visit: amt(m.visit, company),
+    inquiry: amt(m.inquiry, company),
+    inquiryConform: amt(m.inquiry_conform, company),
+    orderLoss: amt(m.order_loss, company),
+  }));
+}
+
 export function buildInsights(meeting, company) {
   const k = meetingKpis(meeting, company);
   const reps = repRows(meeting, company);
@@ -100,8 +121,7 @@ export function buildInsights(meeting, company) {
   const insights = [];
   if (!reps.length) return insights;
 
-  // 90-day risk concentration
-  if (k.d90Share > 0.25) {
+  if (k.d90Share > 0.2) {
     insights.push({
       type: "danger",
       title: "High 90+ day exposure",
@@ -109,7 +129,6 @@ export function buildInsights(meeting, company) {
     });
   }
 
-  // worst 90-day holder
   const worst90 = [...reps].sort((a, b) => b.d90 - a.d90)[0];
   if (worst90 && worst90.d90 > 0) {
     insights.push({
@@ -119,37 +138,33 @@ export function buildInsights(meeting, company) {
     });
   }
 
-  // low collection % reps
-  const low = reps.filter((r) => r.collPct > 0 && r.collPct < 15).sort((a, b) => a.collPct - b.collPct);
-  low.slice(0, 2).forEach((r) => {
-    insights.push({
-      type: "warning",
-      title: `${r.name}'s collection efficiency is low`,
-      detail: `Collection at ${r.collPct.toFixed(1)}% against a target of ${formatINR(r.newTarget)}.`,
-    });
-  });
-
-  // best performer
   const best = [...reps].sort((a, b) => b.collPct - a.collPct)[0];
   if (best && best.collPct > 0) {
     insights.push({
       type: "success",
-      title: `${best.name} leads on collections`,
-      detail: `Top collection efficiency at ${best.collPct.toFixed(1)}% — share the playbook with the team.`,
+      title: `${best.name} leads on collection efficiency`,
+      detail: `Collected ${formatINR(best.collected)} this week (${best.collPct.toFixed(1)}% of ${formatINR(best.outstanding)} outstanding).`,
     });
   }
 
-  // target movement
-  const delta = k.totalNewTarget - k.totalLastTarget;
-  if (Math.abs(delta) > 0) {
+  const worst = [...reps].filter((r) => r.outstanding > 0).sort((a, b) => a.collPct - b.collPct)[0];
+  if (worst && worst.name !== best?.name) {
     insights.push({
-      type: delta > 0 ? "warning" : "info",
-      title: delta > 0 ? "Targets increased this week" : "Targets eased this week",
-      detail: `Total target moved ${delta > 0 ? "up" : "down"} by ${formatINR(Math.abs(delta))} vs last week (now ${formatINR(k.totalNewTarget)}).`,
+      type: "warning",
+      title: `${worst.name} has the lowest collection rate`,
+      detail: `Only ${worst.collPct.toFixed(1)}% collected against ${formatINR(worst.outstanding)} outstanding this week.`,
     });
   }
 
-  // quotation conversion
+  const grew = reps.filter((r) => r.lastTarget > 0 && r.wowDelta > 0).sort((a, b) => b.wowDelta - a.wowDelta)[0];
+  if (grew) {
+    insights.push({
+      type: "warning",
+      title: `${grew.name}'s outstanding grew week-over-week`,
+      detail: `Up ${formatINR(grew.wowDelta)} vs last week — collections aren't keeping pace with new dues.`,
+    });
+  }
+
   const prep = q.find((s) => s.key === "prepair")?.value || 0;
   const conf = q.find((s) => s.key === "conform")?.value || 0;
   if (prep > 0) {
@@ -164,19 +179,25 @@ export function buildInsights(meeting, company) {
   return insights;
 }
 
+// ---------- empty factories for forms ----------
+const z = () => ({ mbs: 0, mcorp: 0 });
+
 export function emptyRep(name = "") {
-  const z = () => ({ mbs: 0, mcorp: 0 });
   return {
     name,
     aging: { d90: z(), d60: z(), d30: z(), othera: z() },
-    performance: {
-      purchase: z(), sales: z(),
-      coll_per_day: 0, coll_pct: 0, new_target: 0, last_week_target: 0,
-    },
+    weekly_collection: 0, last_week_target: 0, working_days: 6,
   };
 }
 
+export function emptyBranch(name = "") {
+  return { name, purchase: { value: z(), tons: z() }, sales: { value: z(), tons: z() } };
+}
+
+export function emptyMarketingRep(name = "") {
+  return { name, visit: z(), inquiry: z(), inquiry_conform: z(), order_loss: z() };
+}
+
 export function emptyQuotation() {
-  const z = () => ({ mbs: 0, mcorp: 0 });
   return { prepair: z(), conform: z(), pending: z(), under_process: z(), not_conform: z() };
 }

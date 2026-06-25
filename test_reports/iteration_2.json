@@ -1,0 +1,42 @@
+{
+  "summary": "Full re-test after major restructure (OTHER bucket, branch sales/purchase value+tons, marketing section, async /api/extract, dashboard tabs). Backend: 23/23 pytest tests passed (incl. REAL Gemini async extract — POST /api/extract -> job_id, polled GET /api/extract/{job_id} to done with non-empty reps that contain aging.othera, and data contains branches + marketing_reps keys). Frontend (admin + viewer): admin login -> 4 KPI cards correct (kpi-total-outstanding ₹20.34 Cr matches backend 203,418,223), all 3 tabs (collection / branches / marketing) render. Collection table has REP + 90/60/30/Other each with MBS+MCORP+TOTAL sub-columns + COLLECTED + COLL% + totals row. Sales & Purchase shows all 4 branches (Sachin, Ankleshwar, Udhna, Kadodra) with ₹/Tons toggle that actually changes numbers. Marketing tab shows 3 marketing rows. Company toggle All/MBS/MCORP changes KPI values (All=20.34Cr, MBS=16.34Cr, MCORP=4.00Cr, sums match). Trends page renders trend-outstanding/trend-collection/trend-target with weekly/monthly toggle. DataEntry: add/remove for rep+branch+marketing all work; upload-extract-button + file-input present. Viewer: no Data Entry/Users in nav, /data-entry and /users redirect to /.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard / Trends",
+        "issues": [
+          "Recharts console warnings 'The width(-1) and height(-1) of chart should be greater than 0' still fire during initial render and route transitions. Cosmetic only — charts render correctly. Same pre-existing issue noted in iteration_1; consider min-h-[280px] on ResponsiveContainer wrappers."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Add explicit min-height (e.g. min-h-[280px]) to chart wrappers to silence Recharts width(-1)/height(-1) warnings during initial render and tab switches."
+  ],
+  "critical_code_review_comments": [
+    "routes_meetings.py: extraction job rows are persisted in db.extract_jobs forever — add a TTL or cleanup so failed/done jobs don't accumulate.",
+    "routes_meetings.py: HTTPException(422, f'Extraction failed: {exc}') still leaks raw LLM SDK exception strings to the client; sanitize for production.",
+    "auth.py: cookies still set with secure=False (acceptable in preview, but must be True behind https in prod) and brute-force lockout still keyed by (X-Forwarded-For-derived ip + email) which collapses behind k8s ingress — consider email-only lockout with a separate per-IP ceiling.",
+    "GET /api/analytics/trends returns only {weekly: [...]} (no 'monthly' key) yet the frontend Trends page exposes a weekly/monthly toggle — the monthly view is computed client-side, which is fine, but the API name 'analytics/trends' is misleading; either rename or add a monthly aggregate server-side."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (rewrote for new schema + async extract polling; added branch/marketing schema assertions and trend coverage)"
+  ],
+  "success_rate": {"backend": "100% (23/23 incl. real LLM async extract)", "frontend": "100% of requested flows"},
+  "test_credentials": "Admin: admin@company.com / Admin@123 ; Viewer: viewer@company.com / Viewer@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "No new seed data. Created TEST_Weekly meeting (2025-07-15) + ephemeral viewer user inside TestAdminCRUD / TestUsers — both cleaned up. Verified TEST_Weekly was deleted (404 on GET).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test suite at /app/backend/tests/backend_test.py is the source of truth — runs with REACT_APP_BACKEND_URL env var. RUN_EXTRACT=1 triggers the real Gemini async flow (POST returns job_id; we poll GET /api/extract/{job_id} up to 150s). RUN_EXTRACT=0 skips it to save credits. Async extract was verified end-to-end (status=done, reps populated incl. aging.othera, data has branches+marketing_reps keys). Frontend selectors used: tab-collection/tab-branches/tab-marketing, kpi-*, collection-table, aging-bar-chart, rep-leaderboard, insights-panel, branch-section, branch-metric-value/tons, marketing-section, marketing-row-*, company-all/mbs/mcorp, add-rep-button/add-branch-button/add-marketing-button/save-meeting-button/upload-extract-button/file-input, trend-outstanding/trend-collection/trend-target. Latest meeting (2025-06-24) total_outstanding=203,418,223 / collected~18.7M / branch_count=4 / marketing_rep_count=3 / new_target_total==total_outstanding — all confirmed.",
+  "rca of the issue": "N/A — no failures this iteration. The Cloudflare-502 issue reported in iteration_1 for the synchronous /api/extract is fully resolved by the new async job pattern (POST returns {job_id, status:'processing'} instantly; client polls GET /api/extract/{job_id}); end-to-end run completed in ~60s via the public Cloudflare URL with the seeded PDF."
+}
