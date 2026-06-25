@@ -252,6 +252,7 @@ async def extract_file(background: BackgroundTasks, file: UploadFile = File(...)
     await db.extract_jobs.insert_one({
         "id": job_id, "status": "processing", "filename": file.filename or "upload",
         "created_by": admin.get("email"), "created_at": _now_iso(),
+        "created_dt": datetime.now(timezone.utc),
     })
     background.add_task(_run_extraction, job_id, content, file.filename or "upload")
     return {"job_id": job_id, "status": "processing"}

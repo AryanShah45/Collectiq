@@ -45,6 +45,7 @@ async def startup():
     await db.login_attempts.create_index("identifier")
     await db.meetings.create_index("id", unique=True)
     await db.meetings.create_index("meeting_date")
+    await db.extract_jobs.create_index("created_dt", expireAfterSeconds=86400)
     await seed_users()
     await seed_meetings()
     logger.info("Startup complete: indexes ensured, users & meetings seeded.")
