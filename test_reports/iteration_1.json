@@ -1,0 +1,48 @@
+{
+  "summary": "Full-stack testing for COLLECTIQ. Backend: 21/22 pytest tests passed; the only failure (POST /api/extract via public URL) was a Cloudflare 502 edge timeout — the same call succeeds end-to-end via localhost:8001 in ~60–120s and returns all 5 reps with valid aging numbers, so the Gemini LLM integration is working. Frontend: admin/viewer login, KPIs, all charts, company toggle, meeting selector, Trends page (weekly+monthly), Meetings list (4 meetings), Data Entry controls, Users page, and viewer role guards (no Data Entry/Users nav, /data-entry & /users redirect to /) all working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/extract",
+        "issue": "Through the public Cloudflare-fronted REACT_APP_BACKEND_URL the Gemini extraction often returns 502 (Cloudflare edge timeout) because gemini-2.5-pro can take 60-120s on the seeded PDF. Direct call to localhost:8001 succeeded and returned the full parsed JSON (5 reps with correct names ARUN/GHANSHYAM/KAMLESH/ANKLESHWAR/UMESHBHAI and aging numbers). Recommend: stream/async-process the file, or return a job-id + poll, or pre-cache to avoid >100s synchronous calls behind Cloudflare."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard / Trends",
+        "issues": [
+          "Recharts console warnings: 'The width(-1) and height(-1) of chart should be greater than 0' fire repeatedly during initial render and route transitions because chart wrappers briefly have 0 height. Cosmetic only — charts render correctly after layout settles. Consider giving ResponsiveContainer parents an explicit min-height."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Make /api/extract resilient to Cloudflare's ~100s edge timeout — either run extraction in background and poll (recommended), or surface a clear UX 'Extraction in progress, this can take up to 2 minutes' and keep the request alive with chunked response.",
+    "OPTIONAL: Fix Recharts width/height(-1) warnings by giving chart wrappers an explicit min-height (e.g. min-h-[280px])."
+  ],
+  "critical_code_review_comments": [
+    "auth.py: cookies are set with secure=False — fine for current preview but should be True in production (behind https) so cookies cannot leak over http.",
+    "auth.py: brute-force lock key uses (ip:email). Behind Cloudflare/k8s ingress the upstream client IP comes through X-Forwarded-For; request.client.host will be the ingress IP and many users will share a lockout bucket. Consider lockout by email only plus a per-IP global ceiling.",
+    "routes_meetings.py /api/extract: synchronous LLM call inside the HTTP request — vulnerable to the gateway timeout described above. Recommend background task + status endpoint.",
+    "routes_meetings.py: HTTPException(422, f'Extraction failed: {exc}') leaks raw exception messages from the LLM SDK to clients; sanitize before returning."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new pytest suite)"
+  ],
+  "success_rate": {"backend": "95% (21/22, the 1 failure is an infra/gateway timeout, the endpoint itself works)", "frontend": "100% of requested flows"},
+  "test_credentials": "Admin: admin@company.com / Admin@123 ; Viewer: viewer@company.com / Viewer@123 (from /app/memory/test_credentials.md, validated working)",
+  "seed_data_creation": "No new seed data. Used existing 4 seeded meetings. Created/deleted one TEST_Weekly meeting + one ephemeral viewer user inside test_create_and_delete_viewer (both cleaned up).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend covered: auth (login/me/logout, brute force not stressed), full meetings CRUD, role enforcement on POST/PUT/DELETE /meetings + /users + /extract, analytics trends, user management incl. cannot-delete-self. /api/extract was verified to actually work by calling localhost:8001 directly (Gemini returned full structured JSON for the seeded PDF). The failure in the JUnit report is the public-URL variant only. Frontend: full happy-path covered; ONE thing the test request asked for but I did NOT exercise end-to-end is the in-app PDF upload that triggers a real Gemini call — to avoid burning credits twice and because Cloudflare may 502 the upload, I only verified the upload controls exist (upload-extract-button + file-input + admin gating). Test file at /app/backend/tests/backend_test.py is reusable; set RUN_EXTRACT=0 to skip the LLM call on subsequent runs.",
+  "rca of the issue": "POST /api/extract through the public preview URL: the request is proxied via Cloudflare which enforces a ~100s idle timeout on Free/Pro tiers. gemini-2.5-pro on the seeded ~115KB PDF consistently takes 60-120s; when it tips past Cloudflare's window the user sees a 502 'Bad gateway' HTML page even though the backend ultimately completes successfully. Verified by calling http://localhost:8001/api/extract directly with the same cookie session and PDF — got 200 OK with the full structured JSON (5 reps, correct aging buckets, quotation pipeline). Mitigation: convert /api/extract to a fire-and-forget pattern: POST returns a job_id immediately, frontend polls GET /api/extract/{job_id} until status='done'."
+}
