@@ -31,3 +31,4 @@ openpyxl==3.1.5
 # --- Report export (PDF + Excel) and Notion sync ---
 fpdf2==2.8.2
 httpx==0.28.1
+certifi==2025.1.31

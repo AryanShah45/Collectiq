@@ -44,14 +44,30 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    await db.users.create_index("email", unique=True)
-    await db.login_attempts.create_index("identifier")
-    await db.meetings.create_index("id", unique=True)
-    await db.meetings.create_index("meeting_date")
-    await db.extract_jobs.create_index("created_dt", expireAfterSeconds=86400)
-    await seed_users()
-    await seed_settings()
-    logger.info("Startup complete: indexes ensured, users & settings seeded.")
+    import asyncio
+
+    async def _init_db():
+        await db.users.create_index("email", unique=True)
+        await db.login_attempts.create_index("identifier")
+        await db.meetings.create_index("id", unique=True)
+        await db.meetings.create_index("meeting_date")
+        await db.extract_jobs.create_index("created_dt", expireAfterSeconds=86400)
+        await seed_users()
+        await seed_settings()
+
+    # Retry for a while so a database that is still waking up (e.g. a free-tier
+    # cluster resuming) doesn't crash the app. If it's still unreachable, keep
+    # serving anyway — the port opens, and it self-heals once the DB is back.
+    for attempt in range(1, 11):
+        try:
+            await _init_db()
+            logger.info("Startup complete: indexes ensured, users & settings seeded.")
+            return
+        except Exception as exc:
+            logger.warning("Database not ready (attempt %d/10): %s", attempt, exc)
+            await asyncio.sleep(6)
+    logger.error("Could not reach the database during startup; the app will keep "
+                 "running and connect once the database is available.")
 
 
 @app.on_event("shutdown")
