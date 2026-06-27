@@ -15,6 +15,13 @@ REFRESH_TTL_DAYS = 7
 MAX_FAILED = 5
 LOCKOUT_MIN = 15
 
+# Cookie behaviour, configurable for different deployments.
+#   Local / same-origin (default):  COOKIE_SECURE=false  COOKIE_SAMESITE=lax
+#   HTTPS, frontend & backend on DIFFERENT domains: set
+#                                   COOKIE_SECURE=true   COOKIE_SAMESITE=none
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() == "true"
+COOKIE_SAMESITE = os.environ.get("COOKIE_SAMESITE", "lax").lower()
+
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 users_router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -56,10 +63,10 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def set_auth_cookies(response: Response, access: str, refresh: str):
-    response.set_cookie("access_token", access, httponly=True, secure=False,
-                        samesite="lax", max_age=ACCESS_TTL_MIN * 60, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=False,
-                        samesite="lax", max_age=REFRESH_TTL_DAYS * 86400, path="/")
+    response.set_cookie("access_token", access, httponly=True, secure=COOKIE_SECURE,
+                        samesite=COOKIE_SAMESITE, max_age=ACCESS_TTL_MIN * 60, path="/")
+    response.set_cookie("refresh_token", refresh, httponly=True, secure=COOKIE_SECURE,
+                        samesite=COOKIE_SAMESITE, max_age=REFRESH_TTL_DAYS * 86400, path="/")
 
 
 def public_user(user: dict) -> dict:
@@ -180,8 +187,8 @@ async def refresh(request: Request, response: Response):
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         access = create_access_token(str(user["_id"]), user["email"], user.get("role", "viewer"))
-        response.set_cookie("access_token", access, httponly=True, secure=False,
-                            samesite="lax", max_age=ACCESS_TTL_MIN * 60, path="/")
+        response.set_cookie("access_token", access, httponly=True, secure=COOKIE_SECURE,
+                            samesite=COOKIE_SAMESITE, max_age=ACCESS_TTL_MIN * 60, path="/")
         return public_user(user)
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")

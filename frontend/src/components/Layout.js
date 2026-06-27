@@ -1,14 +1,16 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { APP_VERSION } from "@/version";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, TrendingUp, CalendarDays, FilePlus2, Users, LogOut, Activity } from "lucide-react";
+import { LayoutDashboard, TrendingUp, CalendarDays, FilePlus2, Users, LogOut, Activity, SlidersHorizontal } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/trends", label: "Trends", icon: TrendingUp, testid: "nav-trends" },
   { to: "/meetings", label: "Meetings", icon: CalendarDays, testid: "nav-meetings" },
   { to: "/data-entry", label: "Data Entry", icon: FilePlus2, testid: "nav-data-entry", admin: true },
+  { to: "/settings", label: "Roster", icon: SlidersHorizontal, testid: "nav-settings", admin: true },
   { to: "/users", label: "Users", icon: Users, testid: "nav-users", admin: true },
 ];
 
@@ -32,7 +34,9 @@ export default function Layout({ children }) {
                   <Activity className="h-5 w-5 text-white" strokeWidth={2.5} />
                 </div>
                 <div className="leading-tight">
-                  <div className="font-semibold tracking-tight text-[15px]">COLLECTIQ</div>
+                  <div className="font-semibold tracking-tight text-[15px] flex items-center gap-1.5">COLLECTIQ
+                    <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-secondary text-muted-foreground tracking-normal">{APP_VERSION}</span>
+                  </div>
                   <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Collection Intelligence</div>
                 </div>
               </div>

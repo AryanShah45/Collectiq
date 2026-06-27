@@ -9,6 +9,7 @@ export const BUCKETS = [
 
 export function amt(a, company) {
   if (!a) return 0;
+  if (typeof a === "number") return company === COMPANY.ALL || !company ? a : 0;
   if (company === COMPANY.MBS) return a.mbs || 0;
   if (company === COMPANY.MCORP) return a.mcorp || 0;
   return (a.mbs || 0) + (a.mcorp || 0);
@@ -37,14 +38,15 @@ export function meetingKpis(meeting, company) {
     d60 += amt(ag.d60, company);
     d30 += amt(ag.d30, company);
     othera += amt(ag.othera, company);
-    collected += r.weekly_collection || 0;
+    collected += amt(r.weekly_collection, company);
   });
   const totalOutstanding = d90 + d60 + d30 + othera;
+  const newTarget = d90 + d60 + d30; // NEW TARGET excludes the OTHER bucket
   return {
     totalOutstanding, d90, d60, d30, othera,
     collected,
-    collPct: totalOutstanding ? (collected / totalOutstanding) * 100 : 0,
-    newTarget: totalOutstanding,
+    collPct: newTarget ? (collected / newTarget) * 100 : 0,
+    newTarget,
     repCount: reps.length,
     d90Share: totalOutstanding ? d90 / totalOutstanding : 0,
   };
@@ -56,19 +58,22 @@ export function repRows(meeting, company) {
     const d90 = amt(ag.d90, company), d60 = amt(ag.d60, company);
     const d30 = amt(ag.d30, company), othera = amt(ag.othera, company);
     const outstanding = d90 + d60 + d30 + othera;
-    const collected = r.weekly_collection || 0;
+    const newTarget = d90 + d60 + d30; // excludes OTHER, matches the report
+    const collected = amt(r.weekly_collection, company);
+    const collectedMbs = amt(r.weekly_collection, "mbs");
+    const collectedMcorp = amt(r.weekly_collection, "mcorp");
     const wd = r.working_days || 6;
     const lastTarget = r.last_week_target || 0;
     return {
       name: r.name, d90, d60, d30, othera, outstanding,
       mbs: amt(ag.d90, "mbs") + amt(ag.d60, "mbs") + amt(ag.d30, "mbs") + amt(ag.othera, "mbs"),
       mcorp: amt(ag.d90, "mcorp") + amt(ag.d60, "mcorp") + amt(ag.d30, "mcorp") + amt(ag.othera, "mcorp"),
-      collected,
+      collected, collectedMbs, collectedMcorp,
       collPerDay: collected / wd,
-      collPct: outstanding ? (collected / outstanding) * 100 : 0,
-      newTarget: outstanding,
+      collPct: newTarget ? (collected / newTarget) * 100 : 0,
+      newTarget,
       lastTarget,
-      wowDelta: outstanding - lastTarget,
+      wowDelta: newTarget - lastTarget,
     };
   });
 }
@@ -81,14 +86,12 @@ export function bucketCell(rep, bucketKey) {
 export function branchRows(meeting, company) {
   return (meeting?.branches || []).map((b) => ({
     name: b.name,
-    purchaseValue: amt(b.purchase?.value, company),
-    salesValue: amt(b.sales?.value, company),
     purchaseTons: amt(b.purchase?.tons, company),
     salesTons: amt(b.sales?.tons, company),
-    purchaseValueMbs: amt(b.purchase?.value, "mbs"),
-    purchaseValueMcorp: amt(b.purchase?.value, "mcorp"),
-    salesValueMbs: amt(b.sales?.value, "mbs"),
-    salesValueMcorp: amt(b.sales?.value, "mcorp"),
+    purchaseTonsMbs: amt(b.purchase?.tons, "mbs"),
+    purchaseTonsMcorp: amt(b.purchase?.tons, "mcorp"),
+    salesTonsMbs: amt(b.sales?.tons, "mbs"),
+    salesTonsMcorp: amt(b.sales?.tons, "mcorp"),
   }));
 }
 
@@ -143,7 +146,7 @@ export function buildInsights(meeting, company) {
     insights.push({
       type: "success",
       title: `${best.name} leads on collection efficiency`,
-      detail: `Collected ${formatINR(best.collected)} this week (${best.collPct.toFixed(1)}% of ${formatINR(best.outstanding)} outstanding).`,
+      detail: `Collected ${formatINR(best.collected)} this week (${best.collPct.toFixed(1)}% of ${formatINR(best.newTarget)} new target).`,
     });
   }
 
@@ -152,7 +155,7 @@ export function buildInsights(meeting, company) {
     insights.push({
       type: "warning",
       title: `${worst.name} has the lowest collection rate`,
-      detail: `Only ${worst.collPct.toFixed(1)}% collected against ${formatINR(worst.outstanding)} outstanding this week.`,
+      detail: `Only ${worst.collPct.toFixed(1)}% collected against ${formatINR(worst.newTarget)} new target this week.`,
     });
   }
 
@@ -160,7 +163,7 @@ export function buildInsights(meeting, company) {
   if (grew) {
     insights.push({
       type: "warning",
-      title: `${grew.name}'s outstanding grew week-over-week`,
+      title: `${grew.name}'s new target grew week-over-week`,
       detail: `Up ${formatINR(grew.wowDelta)} vs last week — collections aren't keeping pace with new dues.`,
     });
   }
@@ -186,12 +189,12 @@ export function emptyRep(name = "") {
   return {
     name,
     aging: { d90: z(), d60: z(), d30: z(), othera: z() },
-    weekly_collection: 0, last_week_target: 0, working_days: 6,
+    weekly_collection: z(), last_week_target: 0, working_days: 6,
   };
 }
 
 export function emptyBranch(name = "") {
-  return { name, purchase: { value: z(), tons: z() }, sales: { value: z(), tons: z() } };
+  return { name, purchase: { tons: z() }, sales: { tons: z() } };
 }
 
 export function emptyMarketingRep(name = "") {

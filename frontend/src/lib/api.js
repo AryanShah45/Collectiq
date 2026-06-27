@@ -35,4 +35,22 @@ export const listUsers = () => api.get("/users").then((r) => r.data);
 export const createUser = (body) => api.post("/users", body).then((r) => r.data);
 export const deleteUser = (id) => api.delete(`/users/${id}`).then((r) => r.data);
 
+// settings / roster
+export const getSettings = () => api.get("/settings").then((r) => r.data);
+export const updateSettings = (body) => api.put("/settings", body).then((r) => r.data);
+export const getBackup = () => api.get("/backup").then((r) => r.data);
+export const restoreBackup = (data) => api.post("/restore", data).then((r) => r.data);
+
+// export (pdf/xlsx) + notion
+export const exportMeetingFile = (id, fmt) =>
+  api.get(`/meetings/${id}/export.${fmt}`, { responseType: "blob" }).then((r) => r.data);
+export const getNotionStatus = () => api.get("/notion/status").then((r) => r.data);
+export const saveNotionConfig = (body) => api.post("/notion/config", body).then((r) => r.data);
+export const pushMeetingToNotion = (id) => api.post(`/notion/meetings/${id}`).then((r) => r.data);
+
+// briefing + per-rep history
+export const getBriefing = (id) => api.get(`/meetings/${id}/briefing`).then((r) => r.data);
+export const getRepHistory = (name) => api.get(`/reps/${encodeURIComponent(name)}/history`).then((r) => r.data);
+export const downloadTrendsReport = () => api.get("/analytics/report.pdf", { responseType: "blob" }).then((r) => r.data);
+
 export default api;

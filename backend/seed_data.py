@@ -3,8 +3,6 @@ from datetime import datetime, timezone, date
 
 from db import db
 
-RATE = 50000  # ₹ per ton (used to derive branch value from tonnage for the seed sample)
-
 
 def amt(mbs, mcorp):
     return {"mbs": float(mbs), "mcorp": float(mcorp)}
@@ -48,14 +46,28 @@ QUOTATION = {
     "under_process": amt(32, 14), "not_conform": amt(4, 4),
 }
 
+# Marketing people exactly as in the report: Hitesh, Ghanshyam, Meetbhai.
+# visit/inquiry/inquiry_conform/order_loss are (MBS, MCORP) counts.
 MARKETING_REPS = [
-    {"name": "Ghanshyam", "visit": amt(12, 0), "inquiry": amt(15, 1),
-     "inquiry_conform": amt(9, 0), "order_loss": amt(2, 1)},
+    {"name": "Hitesh", "visit": amt(0, 0), "inquiry": amt(0, 0),
+     "inquiry_conform": amt(0, 0), "order_loss": amt(0, 0),
+     "target_tons": 50, "target_tons_achieve_pct": 0,
+     "target_party": 10, "target_party_achieve_pct": 0},
+    {"name": "Ghanshyam", "visit": amt(0, 5), "inquiry": amt(0, 0),
+     "inquiry_conform": amt(0, 3), "order_loss": amt(0, 0),
+     "target_tons": 50, "target_tons_achieve_pct": 125,
+     "target_party": 10, "target_party_achieve_pct": 50},
     {"name": "Meetbhai", "visit": amt(35, 0), "inquiry": amt(4, 0),
-     "inquiry_conform": amt(1, 0), "order_loss": amt(0, 0)},
-    {"name": "Ankleshwar", "visit": amt(5, 0), "inquiry": amt(3, 0),
-     "inquiry_conform": amt(3, 0), "order_loss": amt(0, 0)},
+     "inquiry_conform": amt(0, 0), "order_loss": amt(0, 0),
+     "target_tons": 0, "target_tons_achieve_pct": 0,
+     "target_party": 0, "target_party_achieve_pct": 0},
 ]
+
+# Company-wide rupee figures from the report's bottom summary (split MBS/MCORP).
+REAL_FINANCIALS = {
+    "sales_value": amt(14659825, 5695227),      # TOTAL SALES   = 20,355,052
+    "purchase_value": amt(3278895, 4046736),    # TOTAL PURCHASE =  7,325,631
+}
 
 # (meeting_date, period_start, period_end, scale, coll_scale)
 WEEKS = [
@@ -73,12 +85,22 @@ def _build_branches(scale):
         st_m, st_c = b["s"][0] * scale, b["s"][1] * scale
         out.append({
             "name": b["name"],
-            "purchase": {"tons": amt(round(pt_m, 2), round(pt_c, 2)),
-                         "value": amt(round(pt_m * RATE), round(pt_c * RATE))},
-            "sales": {"tons": amt(round(st_m, 2), round(st_c, 2)),
-                      "value": amt(round(st_m * RATE), round(st_c * RATE))},
+            # Tonnage is from the report; rupee value per branch is left at 0
+            # (the report only gives rupee totals at the company level).
+            "purchase": {"tons": amt(round(pt_m, 2), round(pt_c, 2)), "value": amt(0, 0)},
+            "sales": {"tons": amt(round(st_m, 2), round(st_c, 2)), "value": amt(0, 0)},
         })
     return out
+
+
+def _build_financials(scale):
+    f = REAL_FINANCIALS
+    return {
+        "sales_value": amt(round(f["sales_value"]["mbs"] * scale),
+                           round(f["sales_value"]["mcorp"] * scale)),
+        "purchase_value": amt(round(f["purchase_value"]["mbs"] * scale),
+                              round(f["purchase_value"]["mcorp"] * scale)),
+    }
 
 
 def _build_reps(scale, coll_scale):
@@ -96,7 +118,8 @@ def _build_reps(scale, coll_scale):
 
 
 def _rep_total(rep):
-    return sum((rep["aging"][b]["mbs"] + rep["aging"][b]["mcorp"]) for b in ("d90", "d60", "d30", "othera"))
+    # New Target = 90 + 60 + 30 (excludes OTHER); used to chain last_week_target.
+    return sum((rep["aging"][b]["mbs"] + rep["aging"][b]["mcorp"]) for b in ("d90", "d60", "d30"))
 
 
 def _derive(meeting_date):
@@ -127,6 +150,7 @@ async def seed_meetings():
             "branches": _build_branches(scale),
             "quotation": QUOTATION,
             "marketing_reps": MARKETING_REPS,
+            "financials": _build_financials(scale),
             "created_by": "System Seed",
             "created_at": now, "updated_at": now,
         }

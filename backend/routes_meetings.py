@@ -36,14 +36,16 @@ class Aging(BaseModel):
 class RepEntry(BaseModel):
     name: str
     aging: Aging = Field(default_factory=Aging)
-    weekly_collection: float = 0
+    weekly_collection: Amount = Field(default_factory=Amount)
     last_week_target: float = 0
     working_days: int = 6
 
 
 class PurchaseSales(BaseModel):
-    value: Amount = Field(default_factory=Amount)
+    # Branches are reported in tonnage; rupee value is optional per branch
+    # (the weekly report only prints rupee totals at the company level).
     tons: Amount = Field(default_factory=Amount)
+    value: Amount = Field(default_factory=Amount)
 
 
 class Branch(BaseModel):
@@ -66,6 +68,17 @@ class MarketingRep(BaseModel):
     inquiry: Amount = Field(default_factory=Amount)
     inquiry_conform: Amount = Field(default_factory=Amount)
     order_loss: Amount = Field(default_factory=Amount)
+    # Per-person targets from the report (single figures, not split MBS/MCORP)
+    target_tons: float = 0
+    target_tons_achieve_pct: float = 0
+    target_party: float = 0
+    target_party_achieve_pct: float = 0
+
+
+class Financials(BaseModel):
+    # Company-wide rupee figures taken straight from the report's bottom summary.
+    sales_value: Amount = Field(default_factory=Amount)
+    purchase_value: Amount = Field(default_factory=Amount)
 
 
 class MeetingIn(BaseModel):
@@ -78,6 +91,7 @@ class MeetingIn(BaseModel):
     branches: List[Branch] = Field(default_factory=list)
     quotation: Quotation = Field(default_factory=Quotation)
     marketing_reps: List[MarketingRep] = Field(default_factory=list)
+    financials: Financials = Field(default_factory=Financials)
 
 
 # ---------- helpers ----------
@@ -96,8 +110,16 @@ def _amt_sum(a):
 
 
 def _rep_total(rep: dict) -> float:
+    """Total outstanding for a rep: all four buckets (incl. OTHER)."""
     ag = rep.get("aging", {})
     return sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30", "othera"))
+
+
+def _rep_new_target(rep: dict) -> float:
+    """New Target for a rep = 90 + 60 + 30 day buckets (EXCLUDES the OTHER
+    bucket), matching the weekly meeting report."""
+    ag = rep.get("aging", {})
+    return sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30"))
 
 
 def _enrich(meeting: dict) -> dict:
@@ -108,28 +130,38 @@ def _enrich(meeting: dict) -> dict:
         d60 += _amt_sum(ag.get("d60"))
         d30 += _amt_sum(ag.get("d30"))
         other += _amt_sum(ag.get("othera"))
-        collected += rep.get("weekly_collection", 0) or 0
+        collected += _amt_sum(rep.get("weekly_collection")) if isinstance(rep.get("weekly_collection"), dict) else (rep.get("weekly_collection", 0) or 0)
     total_outstanding = d90 + d60 + d30 + other
+    new_target = d90 + d60 + d30          # NEW TARGET excludes the OTHER bucket
 
-    p_val = s_val = p_tons = s_tons = 0.0
+    p_tons = s_tons = 0.0
+    p_val = s_val = 0.0
     for b in meeting.get("branches", []):
-        p_val += _amt_sum(b.get("purchase", {}).get("value"))
-        s_val += _amt_sum(b.get("sales", {}).get("value"))
         p_tons += _amt_sum(b.get("purchase", {}).get("tons"))
         s_tons += _amt_sum(b.get("sales", {}).get("tons"))
+        p_val += _amt_sum(b.get("purchase", {}).get("value"))
+        s_val += _amt_sum(b.get("sales", {}).get("value"))
+
+    # Rupee sales/purchase totals: the report prints these only at company level,
+    # so prefer the meeting-level financials block; fall back to per-branch sums.
+    fin = meeting.get("financials") or {}
+    fin_sales = _amt_sum(fin.get("sales_value"))
+    fin_purchase = _amt_sum(fin.get("purchase_value"))
+    sales_value = fin_sales if fin_sales else s_val
+    purchase_value = fin_purchase if fin_purchase else p_val
 
     q = meeting.get("quotation", {})
     meeting["summary"] = {
         "total_outstanding": round(total_outstanding, 2),
         "d90": round(d90, 2), "d60": round(d60, 2), "d30": round(d30, 2), "othera": round(other, 2),
         "collected": round(collected, 2),
-        "coll_pct": round(collected / total_outstanding * 100, 2) if total_outstanding else 0,
-        "new_target_total": round(total_outstanding, 2),
+        "coll_pct": round(collected / new_target * 100, 2) if new_target else 0,
+        "new_target_total": round(new_target, 2),
         "rep_count": len(meeting.get("reps", [])),
         "branch_count": len(meeting.get("branches", [])),
         "marketing_rep_count": len(meeting.get("marketing_reps", [])),
-        "purchase_value": round(p_val, 2), "sales_value": round(s_val, 2),
         "purchase_tons": round(p_tons, 2), "sales_tons": round(s_tons, 2),
+        "purchase_value": round(purchase_value, 2), "sales_value": round(sales_value, 2),
         "quotation_prepared": _amt_sum(q.get("prepair")),
         "quotation_confirmed": _amt_sum(q.get("conform")),
     }
@@ -148,7 +180,7 @@ async def _attach_last_week_targets(doc: dict, exclude_id: str = None):
     prior = await db.meetings.find_one(query, sort=[("meeting_date", -1)], projection={"_id": 0})
     if not prior:
         return
-    prior_map = {r["name"].strip().lower(): _rep_total(r) for r in prior.get("reps", [])}
+    prior_map = {r["name"].strip().lower(): _rep_new_target(r) for r in prior.get("reps", [])}
     for r in doc.get("reps", []):
         key = r["name"].strip().lower()
         if key in prior_map:
@@ -181,6 +213,8 @@ async def create_meeting(body: MeetingIn, admin: dict = Depends(require_admin)):
     doc["updated_at"] = now
     await _attach_last_week_targets(doc)
     await db.meetings.insert_one(doc)
+    from routes_notion import maybe_push
+    await maybe_push(dict(doc))
     return _enrich(_clean(doc))
 
 
@@ -195,6 +229,8 @@ async def update_meeting(meeting_id: str, body: MeetingIn, _: dict = Depends(req
     await _attach_last_week_targets(doc, exclude_id=meeting_id)
     await db.meetings.update_one({"id": meeting_id}, {"$set": doc})
     updated = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
+    from routes_notion import maybe_push
+    await maybe_push(dict(updated))
     return _enrich(updated)
 
 
@@ -218,6 +254,106 @@ async def trends(_: dict = Depends(get_current_user)):
             **e,
         })
     return {"weekly": weekly}
+
+
+# ---------- export (PDF / Excel) ----------
+async def _company_names():
+    from routes_settings import get_settings_doc
+    s = await get_settings_doc()
+    return s.get("company_a", "MBS"), s.get("company_b", "MCORP")
+
+
+@meetings_router.get("/analytics/report.pdf")
+async def analytics_report(_: dict = Depends(get_current_user)):
+    from fastapi.responses import Response
+    import export_report
+    docs = await db.meetings.find({}, {"_id": 0}).sort("meeting_date", 1).to_list(500)
+    weeks = []
+    for d in docs:
+        s = _enrich(d)["summary"]
+        visits = sum(_amt_sum(m.get("visit")) for m in d.get("marketing_reps", []))
+        inquiries = sum(_amt_sum(m.get("inquiry")) for m in d.get("marketing_reps", []))
+        confirmed = sum(_amt_sum(m.get("inquiry_conform")) for m in d.get("marketing_reps", []))
+        order_loss = sum(_amt_sum(m.get("order_loss")) for m in d.get("marketing_reps", []))
+        branches = [{
+            "name": b.get("name", ""),
+            "sales_tons": _amt_sum(b.get("sales", {}).get("tons")),
+            "purchase_tons": _amt_sum(b.get("purchase", {}).get("tons")),
+        } for b in d.get("branches", [])]
+        weeks.append({
+            "date": d.get("meeting_date", ""),
+            "outstanding": s["total_outstanding"], "d90": s["d90"], "d60": s["d60"],
+            "d30": s["d30"], "othera": s["othera"], "collected": s["collected"], "coll_pct": s["coll_pct"],
+            "sales_value": s["sales_value"], "purchase_value": s["purchase_value"],
+            "sales_tons": s["sales_tons"], "purchase_tons": s["purchase_tons"],
+            "visits": visits, "inquiries": inquiries, "confirmed": confirmed, "order_loss": order_loss,
+            "conv": round(confirmed / inquiries * 100, 1) if inquiries else 0,
+            "branches": branches,
+        })
+    ca, cb = await _company_names()
+    data = export_report.build_trends_pdf(weeks, ca, cb)
+    headers = {"Content-Disposition": 'attachment; filename="collectiq-trends-report.pdf"'}
+    return Response(content=data, media_type="application/pdf", headers=headers)
+
+
+@meetings_router.get("/reps/{name}/history")
+async def rep_history(name: str, _: dict = Depends(get_current_user)):
+    target = (name or "").strip().lower()
+    docs = await db.meetings.find({}, {"_id": 0}).sort("meeting_date", 1).to_list(500)
+    series = []
+    for d in docs:
+        rep = next((r for r in d.get("reps", []) if (r.get("name") or "").strip().lower() == target), None)
+        if not rep:
+            continue
+        ag = rep.get("aging", {})
+        wc = rep.get("weekly_collection")
+        coll = _amt_sum(wc) if isinstance(wc, dict) else (wc or 0)
+        out = _rep_total(rep)
+        nt = sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30"))
+        series.append({
+            "meeting_date": d.get("meeting_date"), "week_label": d.get("week_label", ""),
+            "d90": round(_amt_sum(ag.get("d90")), 2), "d60": round(_amt_sum(ag.get("d60")), 2),
+            "d30": round(_amt_sum(ag.get("d30")), 2), "othera": round(_amt_sum(ag.get("othera")), 2),
+            "outstanding": round(out, 2), "collected": round(coll, 2),
+            "coll_pct": round(coll / nt * 100, 2) if nt else 0,
+        })
+    return {"name": name, "points": series}
+
+
+@meetings_router.get("/meetings/{meeting_id}/briefing")
+async def meeting_briefing(meeting_id: str, _: dict = Depends(get_current_user)):
+    import briefing
+    doc = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    prev = await db.meetings.find_one(
+        {"meeting_date": {"$lt": doc.get("meeting_date", "")}}, {"_id": 0},
+        sort=[("meeting_date", -1)],
+    )
+    return await briefing.build_briefing(doc, prev)
+
+
+@meetings_router.get("/meetings/{meeting_id}/export.{fmt}")
+async def export_meeting(meeting_id: str, fmt: str, _: dict = Depends(get_current_user)):
+    from fastapi.responses import Response
+    import export_report
+    doc = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    meeting = _enrich(doc)
+    ca, cb = await _company_names()
+    date = meeting.get("meeting_date", "report")
+    if fmt == "pdf":
+        data = export_report.build_pdf(meeting, ca, cb)
+        media = "application/pdf"
+    elif fmt in ("xlsx", "excel"):
+        data = export_report.build_xlsx(meeting, ca, cb)
+        media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        fmt = "xlsx"
+    else:
+        raise HTTPException(status_code=400, detail="Format must be pdf or xlsx")
+    headers = {"Content-Disposition": f'attachment; filename="collectiq-{date}.{fmt}"'}
+    return Response(content=data, media_type=media, headers=headers)
 
 
 # ---------- async extraction ----------

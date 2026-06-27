@@ -1,0 +1,33 @@
+# Render Blueprint — deploys CollectIQ as a single web service.
+# In Render: New +  ->  Blueprint  ->  connect this repo. Render reads this file,
+# creates the service, and prompts you for the two values marked "sync: false"
+# (your MongoDB connection string and an admin password).
+services:
+  - type: web
+    name: collectiq
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: MONGO_URL          # paste your MongoDB Atlas connection string
+        sync: false
+      - key: DB_NAME
+        value: collectiq
+      - key: JWT_SECRET         # auto-generated secure value
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@company.com
+      - key: ADMIN_PASSWORD     # choose a strong password
+        sync: false
+      - key: COOKIE_SECURE      # Render serves HTTPS
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: lax
+      # Optional — add these later if you want AI extraction / briefing / Notion:
+      # - key: GEMINI_API_KEY
+      #   sync: false
+      # - key: NOTION_TOKEN
+      #   sync: false
+      # - key: NOTION_DATABASE_ID
+      #   sync: false

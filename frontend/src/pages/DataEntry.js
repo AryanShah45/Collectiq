@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { getMeeting, createMeeting, updateMeeting, extractFile, getExtractStatus, formatApiError } from "@/lib/api";
 import { emptyRep, emptyBranch, emptyMarketingRep, emptyQuotation, formatINR, meetingKpis } from "@/lib/calc";
+import { useAuth } from "@/context/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,7 @@ function NumInput({ value, onChange, testid, prefix }) {
   );
 }
 
-// MBS / MCORP pair
+// two-company amount pair
 function AmountPair({ value, onChange, prefix, testidBase }) {
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -62,7 +63,7 @@ function normalizeRep(r) {
   return {
     name: r.name || "",
     aging: { d90: m(r.aging?.d90), d60: m(r.aging?.d60), d30: m(r.aging?.d30), othera: m(r.aging?.othera) },
-    weekly_collection: Number(r.weekly_collection) || 0,
+    weekly_collection: m(r.weekly_collection),
     last_week_target: Number(r.last_week_target) || 0,
     working_days: Number(r.working_days) || 6,
   };
@@ -73,8 +74,8 @@ function normalizeBranch(b) {
   const m = (x) => ({ mbs: Number(x?.mbs) || 0, mcorp: Number(x?.mcorp) || 0 });
   return {
     name: b.name || "",
-    purchase: { value: m(b.purchase?.value), tons: m(b.purchase?.tons) },
-    sales: { value: m(b.sales?.value), tons: m(b.sales?.tons) },
+    purchase: { tons: m(b.purchase?.tons) },
+    sales: { tons: m(b.sales?.tons) },
   };
 }
 function normalizeMkt(m) {
@@ -102,10 +103,41 @@ export default function DataEntry() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const fileRef = useRef(null);
+  const { settings, companyA, companyB } = useAuth();
+  const rosterApplied = useRef(false);
   const [form, setForm] = useState(blankForm());
   const [uploading, setUploading] = useState(false);
 
   const { data: existing, isLoading } = useQuery({ queryKey: ["meeting", editId], queryFn: () => getMeeting(editId), enabled: !!editId });
+
+  // For a NEW meeting, pre-fill a row for each name on the roster (once).
+  useEffect(() => {
+    if (editId || rosterApplied.current || !settings) return;
+    const cr = settings.collection_reps || [];
+    const br = settings.branches || [];
+    const mr = settings.marketing_reps || [];
+    if (!cr.length && !br.length && !mr.length) return; // empty roster -> leave blank form
+    rosterApplied.current = true;
+    setForm((prev) => ({
+      ...prev,
+      reps: cr.length ? cr.map((n) => emptyRep(n)) : prev.reps,
+      branches: br.length ? br.map((n) => emptyBranch(n)) : prev.branches,
+      marketing_reps: mr.length ? mr.map((n) => emptyMarketingRep(n)) : prev.marketing_reps,
+    }));
+  }, [settings, editId]);
+
+  const loadRoster = () => {
+    const cr = settings?.collection_reps || [];
+    const br = settings?.branches || [];
+    const mr = settings?.marketing_reps || [];
+    if (!cr.length && !br.length && !mr.length) { toast.error("Your roster is empty — add names on the Roster page first"); return; }
+    update((f) => {
+      if (cr.length) f.reps = cr.map((n) => emptyRep(n));
+      if (br.length) f.branches = br.map((n) => emptyBranch(n));
+      if (mr.length) f.marketing_reps = mr.map((n) => emptyMarketingRep(n));
+    });
+    toast.success("Rows loaded from roster");
+  };
 
   useEffect(() => {
     if (existing) {
@@ -233,11 +265,26 @@ export default function DataEntry() {
         </div>
       </Card>
 
+      {/* Roster hint when empty */}
+      {!editId && settings && !(settings.collection_reps?.length || settings.branches?.length || settings.marketing_reps?.length) && (
+        <Card className="p-4 shadow-none border-dashed bg-secondary/30" data-testid="roster-hint">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Add your representatives and branches once on the <span className="font-medium text-foreground">Roster</span> page, and they'll auto-fill here every week — you'll only enter numbers.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => navigate("/settings")} data-testid="goto-roster">Go to Roster</Button>
+          </div>
+        </Card>
+      )}
+
       {/* Collection Reps */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-medium flex items-center gap-2"><Users2 className="h-5 w-5" /> Collection Reps ({form.reps.length})</h3>
-          <Button variant="secondary" size="sm" onClick={() => update((f) => f.reps.push(emptyRep("")))} data-testid="add-rep-button"><Plus className="h-4 w-4" /> Add Rep</Button>
+          <div className="flex items-center gap-2">
+            {!editId && <Button variant="outline" size="sm" onClick={loadRoster} data-testid="load-roster-button"><Users2 className="h-4 w-4" /> Load from roster</Button>}
+            <Button variant="secondary" size="sm" onClick={() => update((f) => f.reps.push(emptyRep("")))} data-testid="add-rep-button"><Plus className="h-4 w-4" /> Add Rep</Button>
+          </div>
         </div>
         {form.reps.map((rep, i) => (
           <Card key={i} className="p-6 shadow-none" data-testid={`rep-card-${i}`}>
@@ -246,7 +293,7 @@ export default function DataEntry() {
                      onChange={(e) => update((f) => (f.reps[i].name = e.target.value))} data-testid={`rep-name-${i}`} />
               <Button variant="ghost" size="icon" className="text-[#DC2626]" onClick={() => update((f) => f.reps.splice(i, 1))} disabled={form.reps.length === 1} data-testid={`remove-rep-${i}`}><Trash2 className="h-4 w-4" /></Button>
             </div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Outstanding — MBS / MCORP per bucket</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Outstanding — {companyA} / {companyB} per bucket</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
               {AGING.map(([key, label, color]) => (
                 <div key={key} className="flex items-center gap-3">
@@ -257,8 +304,10 @@ export default function DataEntry() {
             </div>
             <Separator className="my-4" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
-              <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Collection This Week</Label>
-                <NumInput value={rep.weekly_collection} prefix="₹" testid={`rep-${i}-weekly-collection`} onChange={(v) => update((f) => (f.reps[i].weekly_collection = v))} /></div>
+              <div className="space-y-1.5 col-span-2"><Label className="text-xs text-muted-foreground">Collection This Week ({companyA} / {companyB})</Label>
+                <AmountPair value={rep.weekly_collection} prefix="₹" testidBase={`rep-${i}-weekly-collection`} onChange={(fld, v) => update((f) => (f.reps[i].weekly_collection[fld] = v))} />
+                <div className="text-[11px] text-muted-foreground">Total: <span className="font-mono text-foreground">{formatINR((rep.weekly_collection?.mbs || 0) + (rep.weekly_collection?.mcorp || 0))}</span></div>
+              </div>
               <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Working Days</Label>
                 <NumInput value={rep.working_days} testid={`rep-${i}-working-days`} onChange={(v) => update((f) => (f.reps[i].working_days = v || 6))} /></div>
               <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
@@ -268,7 +317,7 @@ export default function DataEntry() {
               <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coll %</div>
                 <div className="font-mono text-sm">
-                  {(() => { const out = ["d90", "d60", "d30", "othera"].reduce((s, b) => s + (rep.aging[b].mbs || 0) + (rep.aging[b].mcorp || 0), 0); return out ? ((rep.weekly_collection / out) * 100).toFixed(1) : "0.0"; })()}%
+                  {(() => { const out = ["d90", "d60", "d30", "othera"].reduce((s, b) => s + (rep.aging[b].mbs || 0) + (rep.aging[b].mcorp || 0), 0); const coll = (rep.weekly_collection?.mbs || 0) + (rep.weekly_collection?.mcorp || 0); return out ? ((coll / out) * 100).toFixed(1) : "0.0"; })()}%
                 </div>
               </div>
             </div>
@@ -291,13 +340,11 @@ export default function DataEntry() {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
               <div className="space-y-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-[#2563EB]">Purchase (MBS / MCORP)</div>
-                <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Value</span><div className="flex-1"><AmountPair value={b.purchase.value} prefix="₹" testidBase={`branch-${i}-purchase-value`} onChange={(fld, v) => update((f) => (f.branches[i].purchase.value[fld] = v))} /></div></div>
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-[#2563EB]">Purchase ({companyA} / {companyB})</div>
                 <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Tons</span><div className="flex-1"><AmountPair value={b.purchase.tons} testidBase={`branch-${i}-purchase-tons`} onChange={(fld, v) => update((f) => (f.branches[i].purchase.tons[fld] = v))} /></div></div>
               </div>
               <div className="space-y-3">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-[#16A34A]">Sales (MBS / MCORP)</div>
-                <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Value</span><div className="flex-1"><AmountPair value={b.sales.value} prefix="₹" testidBase={`branch-${i}-sales-value`} onChange={(fld, v) => update((f) => (f.branches[i].sales.value[fld] = v))} /></div></div>
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-[#16A34A]">Sales ({companyA} / {companyB})</div>
                 <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Tons</span><div className="flex-1"><AmountPair value={b.sales.tons} testidBase={`branch-${i}-sales-tons`} onChange={(fld, v) => update((f) => (f.branches[i].sales.tons[fld] = v))} /></div></div>
               </div>
             </div>
@@ -310,7 +357,7 @@ export default function DataEntry() {
         <h3 className="text-base font-medium mb-4">Quotation Pipeline (counts)</h3>
         <div className="space-y-2.5 max-w-2xl">
           <div className="grid grid-cols-12 gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-            <span className="col-span-4">Stage</span><span className="col-span-4">MBS</span><span className="col-span-4">MCORP</span>
+            <span className="col-span-4">Stage</span><span className="col-span-4">{companyA}</span><span className="col-span-4">{companyB}</span>
           </div>
           {QSTAGES.map(([key, label]) => (
             <div key={key} className="grid grid-cols-12 gap-2 items-center">

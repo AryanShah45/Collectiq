@@ -14,6 +14,8 @@ import BranchSection from "@/components/dashboard/BranchSection";
 import MarketingSection from "@/components/dashboard/MarketingSection";
 import InsightsPanel from "@/components/dashboard/InsightsPanel";
 import CompanyToggle from "@/components/dashboard/CompanyToggle";
+import ExportActions from "@/components/dashboard/ExportActions";
+import BriefingPanel from "@/components/dashboard/BriefingPanel";
 
 function fmtDate(s) {
   if (!s) return "";
@@ -74,12 +76,18 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div className="flex justify-end -mt-4">
+        <ExportActions meeting={meeting} />
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <KpiCard testid="kpi-total-outstanding" label="Total Outstanding" value={formatINR(k.totalOutstanding)} sub="New Target = 90+60+30+Other" icon={Wallet} delay={0} />
         <KpiCard testid="kpi-90-day" label="90-Day Overdue" value={formatINR(k.d90)} accent="danger" sub={`${(k.d90Share * 100).toFixed(0)}% of total outstanding`} icon={AlertOctagon} delay={0.06} />
         <KpiCard testid="kpi-collected" label="Collected This Week" value={formatINR(k.collected)} accent="success" sub={`${formatINR(k.collected / 6)} per day`} icon={HandCoins} delay={0.12} />
         <KpiCard testid="kpi-collection-pct" label="Collection %" value={`${k.collPct.toFixed(1)}%`} accent={k.collPct >= 12 ? "success" : k.collPct >= 6 ? "warning" : "danger"} sub="Collected ÷ outstanding" icon={Gauge} delay={0.18} />
       </div>
+
+      <BriefingPanel meetingId={meeting.id} />
 
       <Tabs defaultValue="collection" data-testid="dashboard-tabs">
         <TabsList className="bg-secondary">

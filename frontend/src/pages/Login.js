@@ -47,11 +47,11 @@ export default function Login() {
             Turn your weekly<br />collection meeting<br />into decisions.
           </h1>
           <p className="text-white/60 max-w-md leading-relaxed">
-            Aging analysis across 90 / 60 / 30 days, MBS &amp; MCORP side by side, rep leaderboards,
+            Aging analysis across 90 / 60 / 30 days, two companies side by side, rep leaderboards,
             quotation pipeline and week-over-week trends — all in one control room.
           </p>
           <div className="flex flex-wrap gap-2 pt-2">
-            {["90-Day Aging", "MBS vs MCORP", "Rep Leaderboard", "Quotation Funnel", "Trends"].map((t) => (
+            {["90-Day Aging", "Two-company view", "Rep Leaderboard", "Quotation Funnel", "Trends"].map((t) => (
               <span key={t} className="text-xs px-3 py-1 rounded-full border border-white/20 text-white/70">{t}</span>
             ))}
           </div>

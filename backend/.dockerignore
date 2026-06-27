@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.log
+.env
+.env.*
+!.env.example
+extraction.py.orig
+requirements.full.txt
+tests/
+.pytest_cache/
+_run_local.py

@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { repRows, formatINR } from "@/lib/calc";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import RepHistoryDialog from "@/components/dashboard/RepHistoryDialog";
 
 function initials(name) {
   return (name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -14,16 +16,18 @@ function pctColor(p) {
 }
 
 export default function RepLeaderboard({ meeting, company }) {
+  const [selected, setSelected] = useState(null);
   const rows = repRows(meeting, company).sort((a, b) => b.collPct - a.collPct);
   const maxOut = Math.max(...rows.map((r) => r.outstanding), 1);
 
   return (
     <Card className="p-6 shadow-none" data-testid="rep-leaderboard">
       <h3 className="text-base font-medium mb-1">Collection Rep Leaderboard</h3>
-      <p className="text-xs text-muted-foreground mb-5">Ranked by collection efficiency this week</p>
+      <p className="text-xs text-muted-foreground mb-5">Ranked by collection efficiency · click a rep to see their history</p>
       <div className="space-y-2">
         {rows.map((r, i) => (
-          <div key={r.name} className="grid grid-cols-12 items-center gap-3 px-3 py-3 rounded-md border border-border hover:bg-secondary/50 transition-colors"
+          <div key={r.name} onClick={() => setSelected(r.name)} role="button"
+               className="grid grid-cols-12 items-center gap-3 px-3 py-3 rounded-md border border-border hover:bg-secondary/50 cursor-pointer transition-colors"
                data-testid={`leaderboard-row-${r.name}`}>
             <div className="col-span-5 sm:col-span-4 flex items-center gap-3">
               <span className="text-xs font-mono text-muted-foreground w-4">{i + 1}</span>
@@ -56,6 +60,7 @@ export default function RepLeaderboard({ meeting, company }) {
           </div>
         ))}
       </div>
+      {selected && <RepHistoryDialog name={selected} onClose={() => setSelected(null)} />}
     </Card>
   );
 }

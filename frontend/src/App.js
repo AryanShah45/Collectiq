@@ -9,6 +9,7 @@ import Trends from "@/pages/Trends";
 import Meetings from "@/pages/Meetings";
 import DataEntry from "@/pages/DataEntry";
 import Users from "@/pages/Users";
+import Settings from "@/pages/Settings";
 
 const withLayout = (el) => (
   <ProtectedRoute>
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/meetings" element={withLayout(<Meetings />)} />
           <Route path="/data-entry" element={withAdminLayout(<DataEntry />)} />
           <Route path="/users" element={withAdminLayout(<Users />)} />
+          <Route path="/settings" element={withAdminLayout(<Settings />)} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" richColors />

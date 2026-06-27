@@ -69,9 +69,9 @@ export default function Meetings() {
                 <TableRow key={m.id} className="hover:bg-secondary/40" data-testid={`meeting-row-${m.id}`}>
                   <TableCell className="font-medium">{fmtDate(m.period_start)} – {fmtDate(m.period_end)}</TableCell>
                   <TableCell><Badge variant="outline" className="font-mono text-xs">{m.week_label}</Badge></TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{formatINR(m.summary.total_outstanding)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums text-[#DC2626]">{formatINR(m.summary.d90)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{m.summary.avg_coll_pct.toFixed(1)}%</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatINR(m.summary?.total_outstanding)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-[#DC2626]">{formatINR(m.summary?.d90)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{(m.summary?.coll_pct ?? 0).toFixed(1)}%</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{m.created_by}</TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
