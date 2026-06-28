@@ -13,6 +13,7 @@ from auth import auth_router, users_router, seed_users
 from routes_meetings import meetings_router
 from routes_settings import settings_router, seed_settings
 from routes_notion import notion_router
+from seed_data import seed_meetings
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -54,6 +55,7 @@ async def startup():
         await db.extract_jobs.create_index("created_dt", expireAfterSeconds=86400)
         await seed_users()
         await seed_settings()
+        await seed_meetings()
 
     # Retry for a while so a database that is still waking up (e.g. a free-tier
     # cluster resuming) doesn't crash the app. If it's still unreachable, keep
