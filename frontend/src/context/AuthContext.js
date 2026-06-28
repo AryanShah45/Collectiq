@@ -12,7 +12,17 @@ export function AuthProvider({ children }) {
       const me = await apiMe();
       setUser(me);
     } catch {
-      setUser(false);
+      // Login page removed — establish a session automatically so the app
+      // opens straight to the dashboard. Falls back to the seeded admin
+      // account (overridable via REACT_APP_AUTO_EMAIL / REACT_APP_AUTO_PASSWORD).
+      const autoEmail = process.env.REACT_APP_AUTO_EMAIL || "admin@company.com";
+      const autoPassword = process.env.REACT_APP_AUTO_PASSWORD || "Admin@123";
+      try {
+        const u = await apiLogin(autoEmail, autoPassword);
+        setUser(u);
+      } catch {
+        setUser(false);
+      }
     }
   }, []);
 

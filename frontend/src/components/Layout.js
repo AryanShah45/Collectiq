@@ -1,9 +1,8 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { APP_VERSION } from "@/version";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, TrendingUp, CalendarDays, FilePlus2, Users, LogOut, Activity, SlidersHorizontal } from "lucide-react";
+import { LayoutDashboard, TrendingUp, CalendarDays, FilePlus2, Users, Activity, SlidersHorizontal } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
@@ -15,13 +14,7 @@ const navItems = [
 ];
 
 export default function Layout({ children }) {
-  const { user, isAdmin, logout } = useAuth();
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login");
-  };
+  const { user, isAdmin } = useAuth();
 
   return (
     <div className="min-h-screen bg-background">
@@ -71,9 +64,6 @@ export default function Layout({ children }) {
               >
                 {user?.role}
               </Badge>
-              <Button variant="ghost" size="icon" onClick={handleLogout} data-testid="logout-button" title="Log out">
-                <LogOut className="h-4 w-4" />
-              </Button>
             </div>
           </div>
           {/* mobile nav */}

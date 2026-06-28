@@ -3,7 +3,6 @@ import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
-import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Trends from "@/pages/Trends";
 import Meetings from "@/pages/Meetings";
@@ -28,7 +27,6 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
           <Route path="/" element={withLayout(<Dashboard />)} />
           <Route path="/trends" element={withLayout(<Trends />)} />
           <Route path="/meetings" element={withLayout(<Meetings />)} />

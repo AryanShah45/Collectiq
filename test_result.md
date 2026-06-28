@@ -101,3 +101,40 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Imported CollectIQ (Collection Intelligence Dashboard) from GitHub. User reported the login page was not working ('Something went wrong. Please try again.') and asked to REMOVE the login page so the app opens directly."
+
+frontend:
+  - task: "Remove login page — app opens directly to dashboard with auto admin session"
+    implemented: true
+    working: true
+    file: "frontend/src/context/AuthContext.js, frontend/src/components/ProtectedRoute.js, frontend/src/App.js, frontend/src/components/Layout.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Removed the login page. AuthContext.refresh() now: tries /api/auth/me; if unauthenticated it silently logs in as the seeded admin (admin@company.com / Admin@123) so a session cookie is established and the app opens straight to the dashboard. Removed /login route from App.js and the Login import. ProtectedRoute no longer redirects to /login (no such route now) — on session failure it shows a Retry screen. Removed the logout button from Layout so users are not stranded. Need to verify: visiting the root URL with NO cookies opens directly to the Dashboard (no 'Sign in' screen, no 'Something went wrong' error), data loads, and nav (Trends/Meetings/Data Entry/Roster/Users) works."
+        -working: true
+        -agent: "testing"
+        -comment: "VERIFIED ✓ Tested in fresh browser with no cookies. App opens directly to Dashboard (Collection Insights page) with NO login screen and NO 'Something went wrong' error. All 4 KPI cards render with real data (Total Outstanding ₹20.34 Cr, 90-Day Overdue ₹2.52 Cr, Collected ₹1.87 Cr, Collection % 16.7%). Meeting Briefing section and Collection Outstanding table with rep rows (Arun, Ghanshyam, Kamlesh) all visible. Header shows 'Administrator' user name and 'ADMIN' role badge. NO logout button present (correctly removed). All navigation links work: Dashboard, Trends, Meetings, Data Entry, Roster, Users — all load without errors. Page reload maintains session (no redirect to login). Auto-authentication flow working as designed: /api/auth/me returns 401 (no session) → auto-login via /api/auth/login succeeds → dashboard loads. No console errors. Bug fix is SUCCESSFUL."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Remove login page — app opens directly to dashboard with auto admin session"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Please verify the login-page removal. From a fresh browser (no cookies), loading the root URL must open the Dashboard directly with NO login/sign-in screen and NO 'Something went wrong' error. Confirm the KPIs/table render (data loads), and that top-nav links work (Dashboard, Trends, Meetings, and admin pages Data Entry/Roster/Users). The app auto-authenticates as admin (admin@company.com) behind the scenes — there should be no logout button. Do not test the AI PDF extraction (no AI key configured yet)."
+    -agent: "testing"
+    -message: "Testing complete ✓ The bug fix is SUCCESSFUL. App opens directly to Dashboard with auto-authentication (no login page, no errors). All requested features verified: Dashboard loads with real data (KPIs, Meeting Briefing, Collection table), all navigation links work (Dashboard/Trends/Meetings/Data Entry/Roster/Users), header shows user info (Administrator, ADMIN badge), NO logout button present, session persists after reload. The 401 responses on /api/auth/me are expected behavior (part of the auto-login fallback flow). No console errors. Ready for user acceptance."
