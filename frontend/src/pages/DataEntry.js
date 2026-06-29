@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { getMeeting, createMeeting, updateMeeting, extractFile, getExtractStatus, formatApiError } from "@/lib/api";
-import { emptyRep, emptyBranch, emptyMarketingRep, emptyQuotation, formatINR, meetingKpis } from "@/lib/calc";
+import { emptyRep, emptyBranch, emptyMarketingRep, emptyQuotation, formatINR, formatTons, meetingKpis, WORKING_DAYS } from "@/lib/calc";
 import { useAuth } from "@/context/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -294,7 +294,7 @@ export default function DataEntry() {
         <Card className="p-4 shadow-none border-dashed bg-secondary/30" data-testid="roster-hint">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              Add your representatives and branches once on the <span className="font-medium text-foreground">Roster</span> page, and they'll auto-fill here every week — you'll only enter numbers.
+              Add your representatives and branches once on the <span className="font-medium text-foreground">Roster</span> page, and they will auto-fill here every week — you will only enter numbers.
             </p>
             <Button variant="outline" size="sm" onClick={() => navigate("/settings")} data-testid="goto-roster">Go to Roster</Button>
           </div>
@@ -388,10 +388,22 @@ export default function DataEntry() {
               <div className="space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[#2563EB]">Purchase ({companyA} / {companyB})</div>
                 <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Tons</span><div className="flex-1"><AmountPair value={b.purchase.tons} testidBase={`branch-${i}-purchase-tons`} onChange={(fld, v) => update((f) => (f.branches[i].purchase.tons[fld] = v))} /></div></div>
+                {(() => { const t = (b.purchase?.tons?.mbs || 0) + (b.purchase?.tons?.mcorp || 0); return (
+                  <div className="flex gap-2 pl-[60px]">
+                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</div><div className="font-mono text-sm text-[#2563EB]" data-testid={`branch-${i}-purchase-total`}>{formatTons(t)}</div></div>
+                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Per Day (÷{WORKING_DAYS})</div><div className="font-mono text-sm text-[#2563EB]/80" data-testid={`branch-${i}-purchase-perday`}>{formatTons(t / WORKING_DAYS)}</div></div>
+                  </div>
+                ); })()}
               </div>
               <div className="space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[#16A34A]">Sales ({companyA} / {companyB})</div>
                 <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Tons</span><div className="flex-1"><AmountPair value={b.sales.tons} testidBase={`branch-${i}-sales-tons`} onChange={(fld, v) => update((f) => (f.branches[i].sales.tons[fld] = v))} /></div></div>
+                {(() => { const t = (b.sales?.tons?.mbs || 0) + (b.sales?.tons?.mcorp || 0); return (
+                  <div className="flex gap-2 pl-[60px]">
+                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</div><div className="font-mono text-sm text-[#16A34A]" data-testid={`branch-${i}-sales-total`}>{formatTons(t)}</div></div>
+                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Per Day (÷{WORKING_DAYS})</div><div className="font-mono text-sm text-[#16A34A]/80" data-testid={`branch-${i}-sales-perday`}>{formatTons(t / WORKING_DAYS)}</div></div>
+                  </div>
+                ); })()}
               </div>
             </div>
           </Card>
