@@ -46,3 +46,26 @@ Build a "Meeting Insight" web app that automates the company's **weekly Collecti
 
 ## Credentials
 See `/app/memory/test_credentials.md` (admin@company.com / Admin@123, viewer@company.com / Viewer@123).
+
+
+---
+
+## Changelog — Jul 2025 feature update
+
+- **Aging**: added `d15` slab (MCORP only; MBS stays 0).
+- **New Target** (per rep & totals) = d90+d60+d30 (MBS) + d90+d60+d30+d15 (MCORP). Excludes OTHER. `total_outstanding` includes d15+OTHER.
+- **last_week_target**: now entered manually (no auto-derivation).
+- **Per-day metrics**: Coll/Day and Sale/Day = value / 6 working days (fixed). Branch table has a Total row.
+- **Direct Sale**: a normal branch entry.
+- **Marketing**: kept Visit/Inquiry/Inq-Confirmed/Order-Loss; added per-branch sales (tons, MBS/MCORP), manual target_tons & target_party. Achieve
+---
+
+## Changelog — Jul 2025 feature update
+
+- Aging: added d15 slab (MCORP only; MBS stays 0).
+- New Target (per rep & totals) = d90+d60+d30 (MBS) + d90+d60+d30+d15 (MCORP). Excludes OTHER. total_outstanding includes d15+OTHER.
+- last_week_target: now entered manually (no auto-derivation).
+- Per-day metrics: Coll/Day and Sale/Day = value / 6 working days (fixed). Branch table has a Total row.
+- Direct Sale: a normal branch entry.
+- Marketing: kept Visit/Inquiry/Inq-Confirmed/Order-Loss; added per-branch sales (tons, MBS/MCORP), manual target_tons & target_party. Achieve%/Tons = total sales (both companies, all branches) / target_tons; Achieve%/Party = total visits / target_party (computed client-side).
+- Auth: login page removed; app auto-signs-in as admin (retry-with-backoff).
