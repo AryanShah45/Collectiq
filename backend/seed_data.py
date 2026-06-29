@@ -39,6 +39,7 @@ BRANCH_TONS = [
     {"name": "Ankleshwar", "p": (14.75, 0.00),  "s": (55.03, 0.00)},
     {"name": "Udhna",      "p": (12.97, 2.99),  "s": (29.03, 0.78)},
     {"name": "Kadodra",    "p": (35.68, 14.87), "s": (24.93, 2.78)},
+    {"name": "Direct Sale", "p": (20.00, 5.00), "s": (30.00, 8.00)},
 ]
 
 QUOTATION = {
@@ -51,16 +52,18 @@ QUOTATION = {
 MARKETING_REPS = [
     {"name": "Hitesh", "visit": amt(0, 0), "inquiry": amt(0, 0),
      "inquiry_conform": amt(0, 0), "order_loss": amt(0, 0),
-     "target_tons": 50, "target_tons_achieve_pct": 0,
-     "target_party": 10, "target_party_achieve_pct": 0},
+     "branch_sales": [{"name": "Sachin", "tons": amt(10, 5)},
+                      {"name": "Udhna", "tons": amt(8, 0)}],
+     "target_tons": 50, "target_party": 10},
     {"name": "Ghanshyam", "visit": amt(0, 5), "inquiry": amt(0, 0),
      "inquiry_conform": amt(0, 3), "order_loss": amt(0, 0),
-     "target_tons": 50, "target_tons_achieve_pct": 125,
-     "target_party": 10, "target_party_achieve_pct": 50},
+     "branch_sales": [{"name": "Ankleshwar", "tons": amt(20, 10)},
+                      {"name": "Kadodra", "tons": amt(15, 5)}],
+     "target_tons": 50, "target_party": 10},
     {"name": "Meetbhai", "visit": amt(35, 0), "inquiry": amt(4, 0),
      "inquiry_conform": amt(0, 0), "order_loss": amt(0, 0),
-     "target_tons": 0, "target_tons_achieve_pct": 0,
-     "target_party": 0, "target_party_achieve_pct": 0},
+     "branch_sales": [{"name": "Sachin", "tons": amt(5, 2)}],
+     "target_tons": 40, "target_party": 40},
 ]
 
 # Company-wide rupee figures from the report's bottom summary (split MBS/MCORP).
@@ -109,6 +112,8 @@ def _build_reps(scale, coll_scale):
         ag = {}
         for b, v in r["aging"].items():
             ag[b] = amt(round(v["mbs"] * scale), round(v["mcorp"] * scale))
+        # 15-day slab — MCORP only (sample value derived from the 30-day MCORP dues).
+        ag["d15"] = amt(0, round(ag["d30"]["mcorp"] * 0.3, 2))
         out.append({
             "name": r["name"], "aging": ag,
             "weekly_collection": round(r["weekly_collection"] * coll_scale, 2),
@@ -118,8 +123,8 @@ def _build_reps(scale, coll_scale):
 
 
 def _rep_total(rep):
-    # New Target = 90 + 60 + 30 (excludes OTHER); used to chain last_week_target.
-    return sum((rep["aging"][b]["mbs"] + rep["aging"][b]["mcorp"]) for b in ("d90", "d60", "d30"))
+    # New Target = (MBS 90+60+30) + (MCORP 90+60+30+15); excludes OTHER. Chains last_week_target.
+    return sum((rep["aging"][b]["mbs"] + rep["aging"][b]["mcorp"]) for b in ("d90", "d60", "d30", "d15"))
 
 
 def _derive(meeting_date):
@@ -163,6 +168,8 @@ def REAL_REPS_FULL():
     out = []
     for r in REAL_REPS:
         ag = {b: amt(v["mbs"], v["mcorp"]) for b, v in r["aging"].items()}
+        # 15-day slab — MCORP only (sample value derived from the 30-day MCORP dues).
+        ag["d15"] = amt(0, round(ag["d30"]["mcorp"] * 0.3, 2))
         out.append({"name": r["name"], "aging": ag,
                     "weekly_collection": r["weekly_collection"],
                     "last_week_target": 0, "working_days": 6})

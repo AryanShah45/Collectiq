@@ -30,6 +30,7 @@ class Aging(BaseModel):
     d90: Amount = Field(default_factory=Amount)
     d60: Amount = Field(default_factory=Amount)
     d30: Amount = Field(default_factory=Amount)
+    d15: Amount = Field(default_factory=Amount)  # 15-day slab — MCORP only (mbs stays 0)
     othera: Amount = Field(default_factory=Amount)
 
 
@@ -54,6 +55,12 @@ class Branch(BaseModel):
     sales: PurchaseSales = Field(default_factory=PurchaseSales)
 
 
+class BranchSale(BaseModel):
+    """A marketing person's sales tonnage attributed to one branch (MBS/MCORP)."""
+    name: str = ""
+    tons: Amount = Field(default_factory=Amount)
+
+
 class Quotation(BaseModel):
     prepair: Amount = Field(default_factory=Amount)
     conform: Amount = Field(default_factory=Amount)
@@ -68,7 +75,9 @@ class MarketingRep(BaseModel):
     inquiry: Amount = Field(default_factory=Amount)
     inquiry_conform: Amount = Field(default_factory=Amount)
     order_loss: Amount = Field(default_factory=Amount)
-    # Per-person targets from the report (single figures, not split MBS/MCORP)
+    # Per-person sales bifurcated by branch (TONS), split MBS/MCORP.
+    branch_sales: List[BranchSale] = Field(default_factory=list)
+    # Per-person targets entered manually; achieve% is computed (not stored).
     target_tons: float = 0
     target_tons_achieve_pct: float = 0
     target_party: float = 0
@@ -110,29 +119,31 @@ def _amt_sum(a):
 
 
 def _rep_total(rep: dict) -> float:
-    """Total outstanding for a rep: all four buckets (incl. OTHER)."""
+    """Total outstanding for a rep: all buckets (incl. 15-day MCORP & OTHER)."""
     ag = rep.get("aging", {})
-    return sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30", "othera"))
+    return sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30", "d15", "othera"))
 
 
 def _rep_new_target(rep: dict) -> float:
-    """New Target for a rep = 90 + 60 + 30 day buckets (EXCLUDES the OTHER
-    bucket), matching the weekly meeting report."""
+    """New Target for a rep = (MBS: 90+60+30) + (MCORP: 90+60+30+15).
+    Excludes the OTHER bucket. The 15-day slab only exists for MCORP, so summing
+    d15 across both companies is fine (its MBS side is always 0)."""
     ag = rep.get("aging", {})
-    return sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30"))
+    return sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30", "d15"))
 
 
 def _enrich(meeting: dict) -> dict:
-    d90 = d60 = d30 = other = collected = 0.0
+    d90 = d60 = d30 = d15 = other = collected = 0.0
     for rep in meeting.get("reps", []):
         ag = rep.get("aging", {})
         d90 += _amt_sum(ag.get("d90"))
         d60 += _amt_sum(ag.get("d60"))
         d30 += _amt_sum(ag.get("d30"))
+        d15 += _amt_sum(ag.get("d15"))
         other += _amt_sum(ag.get("othera"))
         collected += _amt_sum(rep.get("weekly_collection")) if isinstance(rep.get("weekly_collection"), dict) else (rep.get("weekly_collection", 0) or 0)
-    total_outstanding = d90 + d60 + d30 + other
-    new_target = d90 + d60 + d30          # NEW TARGET excludes the OTHER bucket
+    total_outstanding = d90 + d60 + d30 + d15 + other
+    new_target = d90 + d60 + d30 + d15     # (MBS 90+60+30) + (MCORP 90+60+30+15); excludes OTHER
 
     p_tons = s_tons = 0.0
     p_val = s_val = 0.0
@@ -153,7 +164,8 @@ def _enrich(meeting: dict) -> dict:
     q = meeting.get("quotation", {})
     meeting["summary"] = {
         "total_outstanding": round(total_outstanding, 2),
-        "d90": round(d90, 2), "d60": round(d60, 2), "d30": round(d30, 2), "othera": round(other, 2),
+        "d90": round(d90, 2), "d60": round(d60, 2), "d30": round(d30, 2),
+        "d15": round(d15, 2), "othera": round(other, 2),
         "collected": round(collected, 2),
         "coll_pct": round(collected / new_target * 100, 2) if new_target else 0,
         "new_target_total": round(new_target, 2),
@@ -211,7 +223,7 @@ async def create_meeting(body: MeetingIn, admin: dict = Depends(require_admin)):
     doc["created_by"] = admin.get("name") or admin.get("email")
     doc["created_at"] = now
     doc["updated_at"] = now
-    await _attach_last_week_targets(doc)
+    # last_week_target is entered manually by the user (no auto-derivation).
     await db.meetings.insert_one(doc)
     from routes_notion import maybe_push
     await maybe_push(dict(doc))
@@ -226,7 +238,7 @@ async def update_meeting(meeting_id: str, body: MeetingIn, _: dict = Depends(req
     doc = body.model_dump()
     doc.update(_derive_period(body.meeting_date))
     doc["updated_at"] = _now_iso()
-    await _attach_last_week_targets(doc, exclude_id=meeting_id)
+    # last_week_target is entered manually by the user (no auto-derivation).
     await db.meetings.update_one({"id": meeting_id}, {"$set": doc})
     updated = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
     from routes_notion import maybe_push
@@ -309,11 +321,12 @@ async def rep_history(name: str, _: dict = Depends(get_current_user)):
         wc = rep.get("weekly_collection")
         coll = _amt_sum(wc) if isinstance(wc, dict) else (wc or 0)
         out = _rep_total(rep)
-        nt = sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30"))
+        nt = sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30", "d15"))
         series.append({
             "meeting_date": d.get("meeting_date"), "week_label": d.get("week_label", ""),
             "d90": round(_amt_sum(ag.get("d90")), 2), "d60": round(_amt_sum(ag.get("d60")), 2),
-            "d30": round(_amt_sum(ag.get("d30")), 2), "othera": round(_amt_sum(ag.get("othera")), 2),
+            "d30": round(_amt_sum(ag.get("d30")), 2),
+            "d15": round(_amt_sum(ag.get("d15")), 2), "othera": round(_amt_sum(ag.get("othera")), 2),
             "outstanding": round(out, 2), "collected": round(coll, 2),
             "coll_pct": round(coll / nt * 100, 2) if nt else 0,
         })

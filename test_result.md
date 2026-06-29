@@ -102,7 +102,23 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Imported CollectIQ (Collection Intelligence Dashboard) from GitHub. User reported the login page was not working ('Something went wrong. Please try again.') and asked to REMOVE the login page so the app opens directly."
+user_problem_statement: "Imported CollectIQ (Collection Intelligence Dashboard) from GitHub. Removed login page (done). NEW FEATURE WORK: data-model & calculation changes — 15-day aging slab for MCORP only; per-rep New Target = (MBS 90+60+30) + (MCORP 90+60+30+15) excluding OTHER; manual last_week_target; Direct Sale branch; per-day calcs; marketing branch-wise sales (tons) with target tons/party and computed achieve%."
+
+backend:
+  - task: "Data model + calc changes: d15 (MCORP) slab, new target formula incl d15, manual last_week_target, marketing branch_sales, Direct Sale branch"
+    implemented: true
+    working: true
+    file: "backend/routes_meetings.py, backend/seed_data.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Backend changes for the new feature set. (1) Aging model now has d15 (Amount) — used for MCORP only (mbs stays 0). (2) New Target = sum of d90+d60+d30+d15 across companies (excludes othera); _rep_new_target, _enrich.summary.new_target_total, coll_pct, and /reps/{name}/history all updated; summary now also returns d15; total_outstanding now includes d15. (3) last_week_target is no longer auto-derived — _attach_last_week_targets is NOT called on create/update, so the manually entered value is preserved. (4) MarketingRep model gained branch_sales: List[BranchSale] where BranchSale={name, tons:{mbs,mcorp}} plus target_tons/target_party (achieve% is computed client-side, not stored). (5) New Branch 'Direct Sale' is just a normal branch and must round-trip. DB was re-seeded. TEST: GET /api/meetings returns reps[].aging.d15, summary.d15, summary.new_target_total == d90+d60+d30+d15; create/update a meeting (admin) with d15 values, a Direct Sale branch, marketing branch_sales + target_tons/target_party + a manual last_week_target and confirm all persist on GET (last_week_target NOT overwritten). Auth: admin@company.com / Admin@123 (cookie login at POST /api/auth/login)."
+        -working: true
+        -agent: "testing"
+        -comment: "BACKEND TESTING COMPLETE ✅ All data model & calculation changes verified successfully. Comprehensive testing performed with 5 test suites covering all requirements: (1) GET /api/meetings VERIFIED: All 4 reps (Arun, Ghanshyam, Kamlesh, Umeshbhai) have aging.d15 with mbs=0 and mcorp>0 (MCORP-only slab working correctly). Summary includes d15=3424650.9. Calculation verified: new_target_total=115592259.9 equals d90+d60+d30+d15 (EXCLUDES othera 91250614.0). total_outstanding=206842873.9 equals d90+d60+d30+d15+othera (INCLUDES othera). Confirmed new_target_total < total_outstanding. Direct Sale branch found in 5 branches. All 3 marketing reps (Hitesh, Ghanshyam, Meetbhai) have branch_sales arrays with name/tons{mbs,mcorp} plus target_tons and target_party fields. (2) POST /api/meetings VERIFIED: Created test meeting with rep having d15{mbs:0,mcorp:25}, Direct Sale branch, marketing rep with branch_sales[{name:'Sachin',tons:{mbs:12,mcorp:3}}], target_tons=40, target_party=30, and manual last_week_target=123456. GET confirmed all fields persisted correctly: d15.mcorp=25, last_week_target=123456 (NOT overwritten/auto-derived), Direct Sale branch with correct tons, marketing branch_sales with Sachin entry. Summary calculations correct: new_target_total=2005 (excludes othera 9999+8888=18887). (3) PUT /api/meetings VERIFIED: Updated last_week_target from 123456 to 777, GET confirmed manual value persisted as 777 (not auto-derived). (4) DELETE /api/meetings VERIFIED: Test meeting deleted successfully, GET returns 404. (5) Other endpoints VERIFIED: /api/auth/me, /api/settings, /api/analytics/trends all return 200 OK with correct data. Backend logs show no errors, all requests completed successfully. All requirements from review_request satisfied."
 
 frontend:
   - task: "Remove login page — app opens directly to dashboard with auto admin session"
@@ -129,22 +145,25 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Remove login page — app opens directly to dashboard with auto admin session"
+    - "Data model + calc changes: d15 (MCORP) slab, new target formula incl d15, manual last_week_target, marketing branch_sales, Direct Sale branch"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
     -agent: "main"
-    -message: "Please verify the login-page removal. From a fresh browser (no cookies), loading the root URL must open the Dashboard directly with NO login/sign-in screen and NO 'Something went wrong' error. Confirm the KPIs/table render (data loads), and that top-nav links work (Dashboard, Trends, Meetings, and admin pages Data Entry/Roster/Users). The app auto-authenticates as admin (admin@company.com) behind the scenes — there should be no logout button. Do not test the AI PDF extraction (no AI key configured yet)."
+    -message: "BACKEND RETEST NEEDED for the new feature set. Please test the CollectIQ backend (auth: admin@company.com / Admin@123 via POST /api/auth/login cookie). Verify: (1) GET /api/meetings — each rep has aging.d15 {mbs:0, mcorp:>0}; summary contains d15; summary.new_target_total equals d90+d60+d30+d15 (NOT including othera); total_outstanding includes d15. (2) Create a meeting via POST /api/meetings with a rep having aging d15 (mcorp), a branch named 'Direct Sale', a marketing_rep with branch_sales [{name,tons:{mbs,mcorp}}] + target_tons + target_party + a manual last_week_target on the rep; then GET it back and confirm ALL those fields persisted and last_week_target was NOT overwritten/auto-derived. (3) Update the same meeting (PUT) changing last_week_target and confirm the manual value persists. Do NOT test AI extraction (no key)."
     -agent: "testing"
     -message: "Testing complete ✓ The bug fix is SUCCESSFUL. App opens directly to Dashboard with auto-authentication (no login page, no errors). All requested features verified: Dashboard loads with real data (KPIs, Meeting Briefing, Collection table), all navigation links work (Dashboard/Trends/Meetings/Data Entry/Roster/Users), header shows user info (Administrator, ADMIN badge), NO logout button present, session persists after reload. The 401 responses on /api/auth/me are expected behavior (part of the auto-login fallback flow). No console errors. Ready for user acceptance."
     -agent: "main"
     -message: "RELIABILITY FIX applied: Added retry-with-backoff (up to 6 attempts with 1s,2s,3s,4s,5s delays) to AuthContext.refresh() to handle transient backend timing issues (cold starts, hot reloads). Please re-verify: fresh browser load should open dashboard directly with NO 'Couldn't reach the server' error screen, and multiple reloads on different routes should work reliably."
     -agent: "testing"
     -message: "RELIABILITY FIX VERIFIED ✓ Comprehensive re-testing completed. All verification requirements PASSED: (1) Fresh browser (cookies cleared) opens DIRECTLY to Dashboard - NO error screen, NO login form, (2) Dashboard renders complete real data - 4 KPI cards, Meeting Briefing, Collection table with rep data, (3) All navigation works flawlessly - tested all 6 routes (Dashboard/Trends/Meetings/Data Entry/Roster/Users), (4) Multiple reloads tested on 4 different routes - NEVER showed error screen or login form, (5) Header shows user info with NO logout button. Console logs confirm expected 401 on /api/auth/me (triggers auto-login). The retry-with-backoff mechanism is working perfectly. No transient failures observed. App is production-ready."
+    -agent: "testing"
+    -message: "BACKEND DATA MODEL CHANGES TESTING COMPLETE ✅ All verification points from review_request satisfied. Tested: (1) GET /api/meetings - d15 slab (MCORP-only) present in all reps with mbs=0, summary.d15 included, new_target_total calculation correct (d90+d60+d30+d15, excludes othera), total_outstanding correct (includes othera), Direct Sale branch present, marketing reps have branch_sales with target_tons/target_party. (2) POST /api/meetings - Created test meeting with d15{mbs:0,mcorp:25}, Direct Sale branch, marketing branch_sales, manual last_week_target=123456; GET confirmed all fields persisted and last_week_target NOT overwritten. (3) PUT /api/meetings - Updated last_week_target to 777, GET confirmed manual value persisted. (4) DELETE cleanup successful. (5) Other endpoints (/api/auth/me, /api/settings, /api/analytics/trends) working. No 500 errors, backend logs clean. Test file: /app/backend_test_d15.py. Ready for main agent to summarize and finish."
+
