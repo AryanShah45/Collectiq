@@ -1,11 +1,59 @@
 import { Card } from "@/components/ui/card";
-import { branchRows, formatTons } from "@/lib/calc";
+import { branchRows, formatTons, WORKING_DAYS } from "@/lib/calc";
+import { useAuth } from "@/context/AuthContext";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
-import { Boxes } from "lucide-react";
+import { Boxes, Truck } from "lucide-react";
+
+function DirectSaleCard({ rows, companyA, companyB }) {
+  const ds = rows.find((b) => {
+    const n = (b.name || "").trim().toLowerCase().replace(/\s+/g, "");
+    return n === "directsale" || n === "directsales";
+  });
+  const pMbs = ds?.purchaseTonsMbs || 0, pMcorp = ds?.purchaseTonsMcorp || 0;
+  const sMbs = ds?.salesTonsMbs || 0, sMcorp = ds?.salesTonsMcorp || 0;
+  const pTotal = pMbs + pMcorp, sTotal = sMbs + sMcorp;
+
+  const Row = ({ label, mbs, mcorp, total, color }) => (
+    <tr className="border-b border-border last:border-0">
+      <td className="text-left px-4 py-3 text-sm font-semibold uppercase tracking-wider" style={{ color }}>{label}</td>
+      <td className="px-3 py-3 font-mono text-sm">{formatTons(mbs)}</td>
+      <td className="px-3 py-3 font-mono text-sm">{formatTons(mcorp)}</td>
+      <td className="px-3 py-3 font-mono text-sm font-semibold bg-secondary/40">{formatTons(total)}</td>
+      <td className="px-3 py-3 font-mono text-sm" style={{ color }}>{formatTons(total / WORKING_DAYS)}</td>
+    </tr>
+  );
+
+  return (
+    <Card className="p-0 shadow-none overflow-hidden" data-testid="direct-sale-card">
+      <div className="p-6 pb-3">
+        <h3 className="text-base font-medium flex items-center gap-2"><Truck className="h-4 w-4" /> Direct Sale</h3>
+        <p className="text-xs text-muted-foreground mt-1">Purchase &amp; Sales (Tons) — {companyA} / {companyB} / Total / Per Day (÷ {WORKING_DAYS})</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-right border-collapse">
+          <thead>
+            <tr className="border-y border-border bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <th className="text-left px-4 py-2">Direct Sale</th>
+              <th className="px-3 py-2">{companyA}</th>
+              <th className="px-3 py-2">{companyB}</th>
+              <th className="px-3 py-2 bg-secondary/80">Total</th>
+              <th className="px-3 py-2">Per Day</th>
+            </tr>
+          </thead>
+          <tbody>
+            <Row label="Purchase" mbs={pMbs} mcorp={pMcorp} total={pTotal} color="#2563EB" />
+            <Row label="Sales" mbs={sMbs} mcorp={sMcorp} total={sTotal} color="#16A34A" />
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
 
 export default function BranchSection({ meeting, company }) {
+  const { companyA, companyB } = useAuth();
   const rows = branchRows(meeting, company);
 
   const chartData = rows.map((b) => ({
@@ -38,64 +86,68 @@ export default function BranchSection({ meeting, company }) {
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6" data-testid="branch-section">
-      <Card className="p-6 shadow-none xl:col-span-2">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-base font-medium flex items-center gap-2"><Boxes className="h-4 w-4" /> Branch Sales &amp; Purchase</h3>
-        </div>
-        <p className="text-xs text-muted-foreground mb-5">Quantity in Tons · by branch</p>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" />
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#6B7280" }} tickLine={false} axisLine={{ stroke: "#DEE2E6" }} />
-              <YAxis tickFormatter={(v) => v.toFixed(0)} tick={{ fontSize: 11, fill: "#6B7280", fontFamily: "IBM Plex Mono" }} tickLine={false} axisLine={false} />
-              <Tooltip content={tip} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-              <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Purchase" fill="#2563EB" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Sales" fill="#16A34A" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
+    <div className="space-y-6" data-testid="branch-section">
+      <DirectSaleCard rows={rows} companyA={companyA} companyB={companyB} />
 
-      <Card className="p-0 shadow-none overflow-hidden">
-        <div className="p-6 pb-3"><h3 className="text-base font-medium">Branch Detail</h3>
-          <p className="text-xs text-muted-foreground mt-1">Purchase &amp; Sales (Tons) · per-day = ÷ 6 working days</p></div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-right border-collapse">
-            <thead>
-              <tr className="border-y border-border bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
-                <th className="text-left px-4 py-2">Branch</th>
-                <th className="px-3 py-2">Purchase</th>
-                <th className="px-3 py-2">Pur/Day</th>
-                <th className="px-3 py-2">Sales</th>
-                <th className="px-3 py-2">Sale/Day</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((b) => (
-                <tr key={b.name} className="border-b border-border hover:bg-secondary/30" data-testid={`branch-row-${b.name}`}>
-                  <td className="text-left px-4 py-2.5 text-sm font-medium">{b.name}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]">{formatTons(b.purchaseTons)}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]/70">{formatTons(b.purchasePerDay)}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]">{formatTons(b.salesTons)}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]/70">{formatTons(b.salesPerDay)}</td>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <Card className="p-6 shadow-none xl:col-span-2">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-base font-medium flex items-center gap-2"><Boxes className="h-4 w-4" /> Branch Sales &amp; Purchase</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mb-5">Quantity in Tons · by branch</p>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#6B7280" }} tickLine={false} axisLine={{ stroke: "#DEE2E6" }} />
+                <YAxis tickFormatter={(v) => v.toFixed(0)} tick={{ fontSize: 11, fill: "#6B7280", fontFamily: "IBM Plex Mono" }} tickLine={false} axisLine={false} />
+                <Tooltip content={tip} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+                <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="Purchase" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="Sales" fill="#16A34A" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-0 shadow-none overflow-hidden">
+          <div className="p-6 pb-3"><h3 className="text-base font-medium">Branch Detail</h3>
+            <p className="text-xs text-muted-foreground mt-1">Purchase &amp; Sales (Tons) · per-day = ÷ {WORKING_DAYS} working days</p></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-right border-collapse">
+              <thead>
+                <tr className="border-y border-border bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="text-left px-4 py-2">Branch</th>
+                  <th className="px-3 py-2">Purchase</th>
+                  <th className="px-3 py-2">Pur/Day</th>
+                  <th className="px-3 py-2">Sales</th>
+                  <th className="px-3 py-2">Sale/Day</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-black bg-secondary/60 font-semibold">
-                <td className="text-left px-4 py-2.5 text-xs uppercase tracking-wider">Total</td>
-                <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.pt)}</td>
-                <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.ppd)}</td>
-                <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.st)}</td>
-                <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.spd)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody>
+                {rows.map((b) => (
+                  <tr key={b.name} className="border-b border-border hover:bg-secondary/30" data-testid={`branch-row-${b.name}`}>
+                    <td className="text-left px-4 py-2.5 text-sm font-medium">{b.name}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]">{formatTons(b.purchaseTons)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]/70">{formatTons(b.purchasePerDay)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]">{formatTons(b.salesTons)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]/70">{formatTons(b.salesPerDay)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-black bg-secondary/60 font-semibold">
+                  <td className="text-left px-4 py-2.5 text-xs uppercase tracking-wider">Total</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.pt)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.ppd)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.st)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.spd)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -100,8 +100,15 @@ function normalizeQuotation(q) {
 
 const blankForm = () => ({
   title: "Weekly Collection Meeting", meeting_date: "", period_start: "", period_end: "", notes: "",
-  reps: [emptyRep("")], branches: [emptyBranch("")], quotation: emptyQuotation(), marketing_reps: [emptyMarketingRep("")],
+  reps: [emptyRep("")], branches: [emptyBranch("Direct Sale")], quotation: emptyQuotation(), marketing_reps: [emptyMarketingRep("")],
 });
+
+// "Direct Sale" must always be available as a branch row.
+const isDirectSale = (name) => (name || "").trim().toLowerCase().replace(/\s+/g, "") === "directsale";
+const withDirectSale = (branches) => {
+  const list = branches || [];
+  return list.some((b) => isDirectSale(b.name)) ? list : [...list, emptyBranch("Direct Sale")];
+};
 
 export default function DataEntry() {
   const [params] = useSearchParams();
@@ -127,7 +134,7 @@ export default function DataEntry() {
     setForm((prev) => ({
       ...prev,
       reps: cr.length ? cr.map((n) => emptyRep(n)) : prev.reps,
-      branches: br.length ? br.map((n) => emptyBranch(n)) : prev.branches,
+      branches: br.length ? withDirectSale(br.map((n) => emptyBranch(n))) : prev.branches,
       marketing_reps: mr.length ? mr.map((n) => emptyMarketingRep(n)) : prev.marketing_reps,
     }));
   }, [settings, editId]);
@@ -139,7 +146,7 @@ export default function DataEntry() {
     if (!cr.length && !br.length && !mr.length) { toast.error("Your roster is empty — add names on the Roster page first"); return; }
     update((f) => {
       if (cr.length) f.reps = cr.map((n) => emptyRep(n));
-      if (br.length) f.branches = br.map((n) => emptyBranch(n));
+      if (br.length) f.branches = withDirectSale(br.map((n) => emptyBranch(n)));
       if (mr.length) f.marketing_reps = mr.map((n) => emptyMarketingRep(n));
     });
     toast.success("Rows loaded from roster");
@@ -152,7 +159,7 @@ export default function DataEntry() {
         meeting_date: existing.meeting_date || "", period_start: existing.period_start || "", period_end: existing.period_end || "",
         notes: existing.notes || "",
         reps: (existing.reps?.length ? existing.reps : [emptyRep("")]).map(normalizeRep),
-        branches: (existing.branches?.length ? existing.branches : [emptyBranch("")]).map(normalizeBranch),
+        branches: withDirectSale((existing.branches?.length ? existing.branches : [emptyBranch("")]).map(normalizeBranch)),
         quotation: normalizeQuotation(existing.quotation),
         marketing_reps: (existing.marketing_reps?.length ? existing.marketing_reps : [emptyMarketingRep("")]).map(normalizeMkt),
       });
@@ -357,7 +364,7 @@ export default function DataEntry() {
                     </div>
                     <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coll / Day</div>
-                      <div className="font-mono text-sm">{formatINR(coll / wd)}</div>
+                      <div className="font-mono text-sm" data-testid={`rep-${i}-coll-day`}>{formatINR(coll / wd)}</div>
                     </div>
                     <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coll %</div>
