@@ -1,7 +1,19 @@
 import axios from "axios";
 
-const BASE = process.env.REACT_APP_BACKEND_URL;
-export const API = `${BASE}/api`;
+// Resolve the API base as SAME-ORIGIN (the host the page is actually served
+// from). This makes credentialed cookie auth resilient to custom-domain
+// quirks like an apex -> www (collectiq.dev -> www.collectiq.dev) 308 redirect,
+// which otherwise breaks the login request. In every Emergent environment
+// (preview + production) the backend is reachable at "/api" on the same host.
+// REACT_APP_BACKEND_URL is kept only as a fallback for non-browser contexts.
+function resolveApiBase() {
+  if (typeof window !== "undefined" && window.location && window.location.origin) {
+    return `${window.location.origin}/api`;
+  }
+  const base = process.env.REACT_APP_BACKEND_URL || "";
+  return `${base}/api`;
+}
+export const API = resolveApiBase();
 
 const api = axios.create({ baseURL: API, withCredentials: true });
 
