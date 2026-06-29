@@ -15,8 +15,11 @@ export default function BranchSection({ meeting, company }) {
   }));
 
   const totals = rows.reduce(
-    (a, b) => ({ pt: a.pt + b.purchaseTons, st: a.st + b.salesTons }),
-    { pt: 0, st: 0 }
+    (a, b) => ({
+      pt: a.pt + b.purchaseTons, st: a.st + b.salesTons,
+      ppd: a.ppd + b.purchasePerDay, spd: a.spd + b.salesPerDay,
+    }),
+    { pt: 0, st: 0, ppd: 0, spd: 0 }
   );
 
   const tip = ({ active, payload, label }) => {
@@ -58,14 +61,16 @@ export default function BranchSection({ meeting, company }) {
 
       <Card className="p-0 shadow-none overflow-hidden">
         <div className="p-6 pb-3"><h3 className="text-base font-medium">Branch Detail</h3>
-          <p className="text-xs text-muted-foreground mt-1">Purchase &amp; Sales (Tons)</p></div>
+          <p className="text-xs text-muted-foreground mt-1">Purchase &amp; Sales (Tons) · per-day = ÷ 6 working days</p></div>
         <div className="overflow-x-auto">
           <table className="w-full text-right border-collapse">
             <thead>
               <tr className="border-y border-border bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
                 <th className="text-left px-4 py-2">Branch</th>
                 <th className="px-3 py-2">Purchase</th>
+                <th className="px-3 py-2">Pur/Day</th>
                 <th className="px-3 py-2">Sales</th>
+                <th className="px-3 py-2">Sale/Day</th>
               </tr>
             </thead>
             <tbody>
@@ -73,7 +78,9 @@ export default function BranchSection({ meeting, company }) {
                 <tr key={b.name} className="border-b border-border hover:bg-secondary/30" data-testid={`branch-row-${b.name}`}>
                   <td className="text-left px-4 py-2.5 text-sm font-medium">{b.name}</td>
                   <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]">{formatTons(b.purchaseTons)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]/70">{formatTons(b.purchasePerDay)}</td>
                   <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]">{formatTons(b.salesTons)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]/70">{formatTons(b.salesPerDay)}</td>
                 </tr>
               ))}
             </tbody>
@@ -81,7 +88,9 @@ export default function BranchSection({ meeting, company }) {
               <tr className="border-t-2 border-black bg-secondary/60 font-semibold">
                 <td className="text-left px-4 py-2.5 text-xs uppercase tracking-wider">Total</td>
                 <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.pt)}</td>
+                <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.ppd)}</td>
                 <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.st)}</td>
+                <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.spd)}</td>
               </tr>
             </tfoot>
           </table>

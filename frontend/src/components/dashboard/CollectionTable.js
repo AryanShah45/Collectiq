@@ -1,38 +1,47 @@
 import { Fragment } from "react";
 import { Card } from "@/components/ui/card";
-import { bucketCell, formatINR, BUCKETS } from "@/lib/calc";
+import { bucketCell, formatINR, BUCKETS, WORKING_DAYS } from "@/lib/calc";
 import { useAuth } from "@/context/AuthContext";
 
 function Money({ v, className = "" }) {
   return <span className={`font-mono tabular-nums text-xs ${className}`}>{formatINR(v)}</span>;
 }
 
+// buckets that feed the New Target (everything except OTHER)
+const TARGET_KEYS = ["d90", "d60", "d30", "d15"];
+
 export default function CollectionTable({ meeting }) {
   const { companyA, companyB } = useAuth();
   const reps = meeting?.reps || [];
-  const buckets = BUCKETS; // d90,d60,d30,othera
+  const buckets = BUCKETS; // d90,d60,d30,d15 (MCORP only),othera
 
   const totals = {};
   buckets.forEach((b) => (totals[b.key] = { mbs: 0, mcorp: 0, total: 0 }));
-  let tOutMbs = 0, tOutMcorp = 0, tOut = 0, tColl = 0, tCollMbs = 0, tCollMcorp = 0;
+  let tOutMbs = 0, tOutMcorp = 0, tOut = 0, tColl = 0, tCollMbs = 0, tCollMcorp = 0, tNewTarget = 0;
 
   const rows = reps.map((r) => {
     const cells = {};
-    let oMbs = 0, oMcorp = 0;
+    let oMbs = 0, oMcorp = 0, newTarget = 0;
     buckets.forEach((b) => {
       const c = bucketCell(r, b.key);
       cells[b.key] = c;
       totals[b.key].mbs += c.mbs; totals[b.key].mcorp += c.mcorp; totals[b.key].total += c.total;
       oMbs += c.mbs; oMcorp += c.mcorp;
+      if (TARGET_KEYS.includes(b.key)) newTarget += c.total;
     });
     const out = oMbs + oMcorp;
     const wc = r.weekly_collection;
     const collMbs = typeof wc === "number" ? 0 : (wc?.mbs || 0);
     const collMcorp = typeof wc === "number" ? 0 : (wc?.mcorp || 0);
     const coll = typeof wc === "number" ? wc : collMbs + collMcorp;
+    const wd = r.working_days || WORKING_DAYS;
     tOutMbs += oMbs; tOutMcorp += oMcorp; tOut += out;
-    tColl += coll; tCollMbs += collMbs; tCollMcorp += collMcorp;
-    return { name: r.name, cells, oMbs, oMcorp, out, coll, collMbs, collMcorp, pct: out ? (coll / out) * 100 : 0 };
+    tColl += coll; tCollMbs += collMbs; tCollMcorp += collMcorp; tNewTarget += newTarget;
+    return {
+      name: r.name, cells, oMbs, oMcorp, out, coll, collMbs, collMcorp,
+      newTarget, collPerDay: coll / wd,
+      pct: newTarget ? (coll / newTarget) * 100 : 0,
+    };
   });
 
   return (
@@ -40,7 +49,8 @@ export default function CollectionTable({ meeting }) {
       <div className="p-6 pb-3">
         <h3 className="text-base font-medium">Collection Outstanding — Company-wise Dues</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          Each aging bucket shown for {companyA}, {companyB} and Total.
+          Each aging bucket shown for {companyA}, {companyB} and Total. The 15-day slab applies to {companyB} only.
+          New Target = 90+60+30 ({companyA}) + 90+60+30+15 ({companyB}).
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -52,11 +62,14 @@ export default function CollectionTable({ meeting }) {
                 <th key={b.key} colSpan={3} className="px-3 py-1.5 text-center text-[11px] uppercase tracking-wider border-l border-border">
                   <span className="inline-flex items-center gap-1.5">
                     <span className="h-2 w-2 rounded-sm" style={{ background: b.color }} />{b.label}
+                    {b.mcorpOnly && <span className="text-[8px] text-muted-foreground">({companyB})</span>}
                   </span>
                 </th>
               ))}
               <th colSpan={3} className="px-3 py-1.5 text-center text-[11px] uppercase tracking-wider border-l border-border bg-black text-white">Total Outstanding</th>
+              <th rowSpan={2} className="px-3 py-2 text-[11px] uppercase tracking-wider border-l border-border">New Target</th>
               <th colSpan={3} className="px-3 py-1.5 text-center text-[11px] uppercase tracking-wider border-l border-border">Collected This Week</th>
+              <th rowSpan={2} className="px-3 py-2 text-[11px] uppercase tracking-wider border-l border-border">Coll/Day</th>
               <th rowSpan={2} className="px-3 py-2 text-[11px] uppercase tracking-wider border-l border-border">Coll %</th>
             </tr>
             <tr className="border-b border-border bg-secondary/40 text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -81,7 +94,11 @@ export default function CollectionTable({ meeting }) {
                 <td className="sticky left-0 bg-white text-left px-4 py-2.5 text-sm font-medium whitespace-nowrap">{r.name}</td>
                 {buckets.map((b) => (
                   <Fragment key={b.key}>
-                    <td className="px-2 py-2.5 border-l border-border/60"><Money v={r.cells[b.key].mbs} className="text-muted-foreground" /></td>
+                    <td className="px-2 py-2.5 border-l border-border/60">
+                      {b.mcorpOnly
+                        ? <span className="font-mono text-xs text-muted-foreground/50">—</span>
+                        : <Money v={r.cells[b.key].mbs} className="text-muted-foreground" />}
+                    </td>
                     <td className="px-2 py-2.5"><Money v={r.cells[b.key].mcorp} className="text-muted-foreground" /></td>
                     <td className="px-2 py-2.5"><Money v={r.cells[b.key].total} className="font-semibold" /></td>
                   </Fragment>
@@ -89,9 +106,11 @@ export default function CollectionTable({ meeting }) {
                 <td className="px-2 py-2.5 border-l border-border bg-secondary/20"><Money v={r.oMbs} /></td>
                 <td className="px-2 py-2.5 bg-secondary/20"><Money v={r.oMcorp} /></td>
                 <td className="px-2 py-2.5 bg-secondary/20"><Money v={r.out} className="font-semibold" /></td>
+                <td className="px-3 py-2.5 border-l border-border"><Money v={r.newTarget} className="font-semibold" /></td>
                 <td className="px-2 py-2.5 border-l border-border"><Money v={r.collMbs} className="text-[#16A34A]/70" /></td>
                 <td className="px-2 py-2.5"><Money v={r.collMcorp} className="text-[#16A34A]/70" /></td>
                 <td className="px-2 py-2.5"><Money v={r.coll} className="text-[#16A34A] font-semibold" /></td>
+                <td className="px-3 py-2.5 border-l border-border"><Money v={r.collPerDay} className="text-[#16A34A]" /></td>
                 <td className="px-3 py-2.5 border-l border-border">
                   <span className={`font-mono tabular-nums text-xs font-semibold ${r.pct >= 12 ? "text-[#16A34A]" : r.pct >= 6 ? "text-[#F59E0B]" : "text-[#DC2626]"}`}>{r.pct.toFixed(1)}%</span>
                 </td>
@@ -103,7 +122,9 @@ export default function CollectionTable({ meeting }) {
               <td className="sticky left-0 bg-secondary/60 text-left px-4 py-2.5 text-xs uppercase tracking-wider">Total</td>
               {buckets.map((b) => (
                 <Fragment key={b.key}>
-                  <td className="px-2 py-2.5 border-l border-border"><Money v={totals[b.key].mbs} /></td>
+                  <td className="px-2 py-2.5 border-l border-border">
+                    {b.mcorpOnly ? <span className="font-mono text-xs text-muted-foreground/50">—</span> : <Money v={totals[b.key].mbs} />}
+                  </td>
                   <td className="px-2 py-2.5"><Money v={totals[b.key].mcorp} /></td>
                   <td className="px-2 py-2.5"><Money v={totals[b.key].total} /></td>
                 </Fragment>
@@ -111,10 +132,12 @@ export default function CollectionTable({ meeting }) {
               <td className="px-2 py-2.5 border-l border-border bg-black text-white"><Money v={tOutMbs} className="!text-white" /></td>
               <td className="px-2 py-2.5 bg-black text-white"><Money v={tOutMcorp} className="!text-white" /></td>
               <td className="px-2 py-2.5 bg-black text-white"><Money v={tOut} className="!text-white" /></td>
+              <td className="px-3 py-2.5 border-l border-border"><Money v={tNewTarget} /></td>
               <td className="px-2 py-2.5 border-l border-border"><Money v={tCollMbs} className="text-[#16A34A]" /></td>
               <td className="px-2 py-2.5"><Money v={tCollMcorp} className="text-[#16A34A]" /></td>
               <td className="px-2 py-2.5"><Money v={tColl} className="text-[#16A34A]" /></td>
-              <td className="px-3 py-2.5 border-l border-border"><span className="font-mono text-xs">{tOut ? ((tColl / tOut) * 100).toFixed(1) : 0}%</span></td>
+              <td className="px-3 py-2.5 border-l border-border"><Money v={tColl / WORKING_DAYS} className="text-[#16A34A]" /></td>
+              <td className="px-3 py-2.5 border-l border-border"><span className="font-mono text-xs">{tNewTarget ? ((tColl / tNewTarget) * 100).toFixed(1) : 0}%</span></td>
             </tr>
           </tfoot>
         </table>

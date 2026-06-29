@@ -30,7 +30,7 @@ function CurrencyTooltip({ active, payload, label }) {
 export default function AgingChart({ meeting, company }) {
   const rows = repRows(meeting, company);
   const data = rows.map((r) => ({
-    name: r.name, d90: r.d90, d60: r.d60, d30: r.d30, othera: r.othera,
+    name: r.name, d90: r.d90, d60: r.d60, d30: r.d30, d15: r.d15, othera: r.othera,
   }));
   const pieData = BUCKETS.map((b) => ({
     name: b.label, value: rows.reduce((s, r) => s + r[b.key], 0), color: b.color,
@@ -52,6 +52,7 @@ export default function AgingChart({ meeting, company }) {
               <Tooltip content={<CurrencyTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
               <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="d30" stackId="a" name="30 Days" fill="#2563EB" />
+              <Bar dataKey="d15" stackId="a" name="15 Days (MCORP)" fill="#0EA5E9" />
               <Bar dataKey="d60" stackId="a" name="60 Days" fill="#F59E0B" />
               <Bar dataKey="d90" stackId="a" name="90 Days" fill="#DC2626" />
               <Bar dataKey="othera" stackId="a" name="Other" fill="#6B7280" radius={[3, 3, 0, 0]} />

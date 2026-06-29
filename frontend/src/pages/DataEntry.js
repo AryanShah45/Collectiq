@@ -62,7 +62,7 @@ function normalizeRep(r) {
   const m = (x) => ({ mbs: Number(x?.mbs) || 0, mcorp: Number(x?.mcorp) || 0 });
   return {
     name: r.name || "",
-    aging: { d90: m(r.aging?.d90), d60: m(r.aging?.d60), d30: m(r.aging?.d30), othera: m(r.aging?.othera) },
+    aging: { d90: m(r.aging?.d90), d60: m(r.aging?.d60), d30: m(r.aging?.d30), d15: m(r.aging?.d15), othera: m(r.aging?.othera) },
     weekly_collection: m(r.weekly_collection),
     last_week_target: Number(r.last_week_target) || 0,
     working_days: Number(r.working_days) || 6,
@@ -82,7 +82,13 @@ function normalizeMkt(m) {
   const base = emptyMarketingRep(m?.name || "");
   if (!m) return base;
   const a = (x) => ({ mbs: Number(x?.mbs) || 0, mcorp: Number(x?.mcorp) || 0 });
-  return { name: m.name || "", visit: a(m.visit), inquiry: a(m.inquiry), inquiry_conform: a(m.inquiry_conform), order_loss: a(m.order_loss) };
+  return {
+    name: m.name || "",
+    visit: a(m.visit), inquiry: a(m.inquiry), inquiry_conform: a(m.inquiry_conform), order_loss: a(m.order_loss),
+    branch_sales: (m.branch_sales || []).map((b) => ({ name: b.name || "", tons: a(b.tons) })),
+    target_tons: Number(m.target_tons) || 0,
+    target_party: Number(m.target_party) || 0,
+  };
 }
 function normalizeQuotation(q) {
   const base = emptyQuotation();
@@ -155,6 +161,18 @@ export default function DataEntry() {
 
   const update = (mutator) => setForm((prev) => { const next = structuredClone(prev); mutator(next); return next; });
 
+  // marketing branch-sales helpers (sales tons per branch, per company)
+  const getMktBranchSale = (m, branchName) =>
+    (m.branch_sales || []).find((x) => x.name === branchName)?.tons || { mbs: 0, mcorp: 0 };
+  const setMktBranchSale = (i, branchName, fld, v) => update((f) => {
+    const m = f.marketing_reps[i];
+    if (!m.branch_sales) m.branch_sales = [];
+    let bs = m.branch_sales.find((x) => x.name === branchName);
+    if (!bs) { bs = { name: branchName, tons: { mbs: 0, mcorp: 0 } }; m.branch_sales.push(bs); }
+    if (!bs.tons) bs.tons = { mbs: 0, mcorp: 0 };
+    bs.tons[fld] = v;
+  });
+
   const save = useMutation({
     mutationFn: (payload) => (editId ? updateMeeting(editId, payload) : createMeeting(payload)),
     onSuccess: (res) => {
@@ -205,10 +223,15 @@ export default function DataEntry() {
   const submit = () => {
     if (!form.meeting_date) { toast.error("Please select a meeting date"); return; }
     if (form.reps.some((r) => !r.name.trim())) { toast.error("Every collection rep needs a name"); return; }
+    const branchNames = form.branches.map((b) => (b.name || "").trim()).filter(Boolean);
     const payload = {
       ...form,
       branches: form.branches.filter((b) => b.name.trim()),
-      marketing_reps: form.marketing_reps.filter((m) => m.name.trim()),
+      marketing_reps: form.marketing_reps.filter((m) => m.name.trim()).map((m) => ({
+        ...m,
+        // keep only branch sales that match a current branch name
+        branch_sales: (m.branch_sales || []).filter((bs) => branchNames.includes((bs.name || "").trim())),
+      })),
     };
     save.mutate(payload);
   };
@@ -216,6 +239,7 @@ export default function DataEntry() {
   if (editId && isLoading) return <div className="flex items-center justify-center py-32"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
 
   const preview = meetingKpis(form, "all");
+  const branchOptions = form.branches.map((b) => (b.name || "").trim()).filter(Boolean);
 
   return (
     <div className="space-y-6 pb-12" data-testid="data-entry-page">
@@ -302,24 +326,46 @@ export default function DataEntry() {
                 </div>
               ))}
             </div>
+            <div className="mt-3 flex items-center gap-3">
+              <span className="flex items-center gap-2 text-sm w-44 shrink-0">
+                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#0EA5E9" }} />15 Days <span className="text-[11px] text-muted-foreground">({companyB} only)</span>
+              </span>
+              <div className="w-1/2 md:w-[calc(50%-1rem)]">
+                <NumInput value={rep.aging.d15?.mcorp} prefix="₹" testid={`rep-${i}-d15-mcorp`}
+                          onChange={(v) => update((f) => (f.reps[i].aging.d15.mcorp = v))} />
+              </div>
+            </div>
             <Separator className="my-4" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
               <div className="space-y-1.5 col-span-2"><Label className="text-xs text-muted-foreground">Collection This Week ({companyA} / {companyB})</Label>
                 <AmountPair value={rep.weekly_collection} prefix="₹" testidBase={`rep-${i}-weekly-collection`} onChange={(fld, v) => update((f) => (f.reps[i].weekly_collection[fld] = v))} />
                 <div className="text-[11px] text-muted-foreground">Total: <span className="font-mono text-foreground">{formatINR((rep.weekly_collection?.mbs || 0) + (rep.weekly_collection?.mcorp || 0))}</span></div>
               </div>
+              <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Last Week Target (₹)</Label>
+                <NumInput value={rep.last_week_target} prefix="₹" testid={`rep-${i}-last-week-target`} onChange={(v) => update((f) => (f.reps[i].last_week_target = v))} /></div>
               <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Working Days</Label>
                 <NumInput value={rep.working_days} testid={`rep-${i}-working-days`} onChange={(v) => update((f) => (f.reps[i].working_days = v || 6))} /></div>
-              <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">New Target (Outstanding)</div>
-                <div className="font-mono text-sm">{formatINR(["d90", "d60", "d30", "othera"].reduce((s, b) => s + (rep.aging[b].mbs || 0) + (rep.aging[b].mcorp || 0), 0))}</div>
-              </div>
-              <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coll %</div>
-                <div className="font-mono text-sm">
-                  {(() => { const out = ["d90", "d60", "d30", "othera"].reduce((s, b) => s + (rep.aging[b].mbs || 0) + (rep.aging[b].mcorp || 0), 0); const coll = (rep.weekly_collection?.mbs || 0) + (rep.weekly_collection?.mcorp || 0); return out ? ((coll / out) * 100).toFixed(1) : "0.0"; })()}%
-                </div>
-              </div>
+              {(() => {
+                const newTarget = ["d90", "d60", "d30", "d15"].reduce((s, b) => s + (rep.aging[b]?.mbs || 0) + (rep.aging[b]?.mcorp || 0), 0);
+                const coll = (rep.weekly_collection?.mbs || 0) + (rep.weekly_collection?.mcorp || 0);
+                const wd = rep.working_days || 6;
+                return (
+                  <>
+                    <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">New Target (90+60+30+15)</div>
+                      <div className="font-mono text-sm" data-testid={`rep-${i}-new-target`}>{formatINR(newTarget)}</div>
+                    </div>
+                    <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coll / Day</div>
+                      <div className="font-mono text-sm">{formatINR(coll / wd)}</div>
+                    </div>
+                    <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coll %</div>
+                      <div className="font-mono text-sm">{newTarget ? ((coll / newTarget) * 100).toFixed(1) : "0.0"}%</div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </Card>
         ))}
@@ -388,6 +434,48 @@ export default function DataEntry() {
                   <div className="flex-1"><AmountPair value={m[key]} testidBase={`marketing-${i}-${key}`} onChange={(fld, v) => update((f) => (f.marketing_reps[i][key][fld] = v))} /></div>
                 </div>
               ))}
+            </div>
+
+            <Separator className="my-4" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+              <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Target Tons</Label>
+                <NumInput value={m.target_tons} testid={`marketing-${i}-target-tons`} onChange={(v) => update((f) => (f.marketing_reps[i].target_tons = v))} /></div>
+              <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">Target Party (visits)</Label>
+                <NumInput value={m.target_party} testid={`marketing-${i}-target-party`} onChange={(v) => update((f) => (f.marketing_reps[i].target_party = v))} /></div>
+              {(() => {
+                const totalSales = (m.branch_sales || []).reduce((s, b) => s + (b.tons?.mbs || 0) + (b.tons?.mcorp || 0), 0);
+                const totalVisit = (m.visit?.mbs || 0) + (m.visit?.mcorp || 0);
+                const at = m.target_tons ? (totalSales / m.target_tons) * 100 : 0;
+                const ap = m.target_party ? (totalVisit / m.target_party) * 100 : 0;
+                return (
+                  <>
+                    <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Achieve% Tons</div>
+                      <div className="font-mono text-sm">{at.toFixed(1)}% <span className="text-[10px] text-muted-foreground">({totalSales.toFixed(1)} T)</span></div>
+                    </div>
+                    <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Achieve% Party</div>
+                      <div className="font-mono text-sm">{ap.toFixed(1)}% <span className="text-[10px] text-muted-foreground">({totalVisit} visits)</span></div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="mt-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-[#16A34A] mb-2">Sales by Branch — Tons ({companyA} / {companyB})</div>
+              {branchOptions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Add branches in the &ldquo;Branch Sales &amp; Purchase&rdquo; section above to record branch-wise sales here.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                  {branchOptions.map((bn) => (
+                    <div key={bn} className="flex items-center gap-3">
+                      <span className="text-sm w-28 shrink-0 text-muted-foreground truncate" title={bn}>{bn}</span>
+                      <div className="flex-1"><AmountPair value={getMktBranchSale(m, bn)} testidBase={`marketing-${i}-branchsale-${bn}`} onChange={(fld, v) => setMktBranchSale(i, bn, fld, v)} /></div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
         ))}

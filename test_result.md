@@ -121,6 +121,18 @@ backend:
         -comment: "BACKEND TESTING COMPLETE ✅ All data model & calculation changes verified successfully. Comprehensive testing performed with 5 test suites covering all requirements: (1) GET /api/meetings VERIFIED: All 4 reps (Arun, Ghanshyam, Kamlesh, Umeshbhai) have aging.d15 with mbs=0 and mcorp>0 (MCORP-only slab working correctly). Summary includes d15=3424650.9. Calculation verified: new_target_total=115592259.9 equals d90+d60+d30+d15 (EXCLUDES othera 91250614.0). total_outstanding=206842873.9 equals d90+d60+d30+d15+othera (INCLUDES othera). Confirmed new_target_total < total_outstanding. Direct Sale branch found in 5 branches. All 3 marketing reps (Hitesh, Ghanshyam, Meetbhai) have branch_sales arrays with name/tons{mbs,mcorp} plus target_tons and target_party fields. (2) POST /api/meetings VERIFIED: Created test meeting with rep having d15{mbs:0,mcorp:25}, Direct Sale branch, marketing rep with branch_sales[{name:'Sachin',tons:{mbs:12,mcorp:3}}], target_tons=40, target_party=30, and manual last_week_target=123456. GET confirmed all fields persisted correctly: d15.mcorp=25, last_week_target=123456 (NOT overwritten/auto-derived), Direct Sale branch with correct tons, marketing branch_sales with Sachin entry. Summary calculations correct: new_target_total=2005 (excludes othera 9999+8888=18887). (3) PUT /api/meetings VERIFIED: Updated last_week_target from 123456 to 777, GET confirmed manual value persisted as 777 (not auto-derived). (4) DELETE /api/meetings VERIFIED: Test meeting deleted successfully, GET returns 404. (5) Other endpoints VERIFIED: /api/auth/me, /api/settings, /api/analytics/trends all return 200 OK with correct data. Backend logs show no errors, all requests completed successfully. All requirements from review_request satisfied."
 
 frontend:
+  - task: "Dashboard + Data Entry UI for new fields (d15 column, New Target, Coll/Day, per-day sales + total, Direct Sale, marketing branch sales + targets + achieve%)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/lib/calc.js, frontend/src/pages/Dashboard.js, frontend/src/pages/DataEntry.js, frontend/src/components/dashboard/CollectionTable.js, BranchSection.js, MarketingSection.js, AgingChart.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Implemented all 8 UI changes. (1) CollectionTable: added 15-day column (MCORP only — MBS shows em-dash), a per-rep New Target column (=90+60+30+15), a Coll/Day column (=weekly collection/6), and the existing Total row now includes these. (2) Dashboard KPI subtitles updated. (3) BranchSection: added Pur/Day & Sale/Day columns and a Total row. Direct Sale is a normal branch row. (4) MarketingSection: kept the existing Activity table (Visits/Inquiries/Inq.Confirmed/Order Loss) AND added a new 'Sales by Branch & Target Achievement' table — per-branch sales (Tons), Total Sales, Target T, Ach% Tons (= total sales both companies all branches / target tons), Visits, Target Party, Ach% Party (= total visits / target party). (5) AgingChart includes d15. (6) DataEntry: rep card has a 15-day (MCORP-only) input, a manual Last Week Target input, and live New Target(90+60+30+15)/Coll-Day/Coll% boxes; marketing card has Target Tons + Target Party inputs, live Achieve% boxes, and per-branch sales inputs (rows generated from the current branch list). calc.js updated (BUCKETS+d15, meetingKpis/repRows new target incl d15 + collPerDay, branchRows perDay, marketingRepRows branch totals + achieve%, emptyRep/emptyMarketingRep). Visually verified via screenshots — all tables/forms render with correct numbers (e.g., Ghanshyam 50/50T=100%, Meetbhai 35/40 visits=87.5%). NOTE: also had to fix frontend/.env REACT_APP_BACKEND_URL which the deploy had repointed to the deployed host (caused a cross-origin CORS-with-credentials failure in preview) — restored it to this preview's host."
+
   - task: "Remove login page — app opens directly to dashboard with auto admin session"
     implemented: true
     working: true
@@ -150,7 +162,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Data model + calc changes: d15 (MCORP) slab, new target formula incl d15, manual last_week_target, marketing branch_sales, Direct Sale branch"
+    - "Dashboard + Data Entry UI for new fields (d15 column, New Target, Coll/Day, per-day sales + total, Direct Sale, marketing branch sales + targets + achieve%)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
