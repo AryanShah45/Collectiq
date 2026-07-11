@@ -2,10 +2,11 @@ import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { getMeetings } from "@/lib/api";
-import { meetingKpis, formatINR, COMPANY } from "@/lib/calc";
+import { meetingKpis, formatINR, COMPANY, dsoDays, salesValueTotal, WORKING_DAYS } from "@/lib/calc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Loader2, Wallet, AlertOctagon, HandCoins, Gauge, CalendarRange } from "lucide-react";
+import { Loader2, Wallet, AlertOctagon, HandCoins, Gauge, CalendarRange, Hourglass } from "lucide-react";
+import WowStrip from "@/components/dashboard/WowStrip";
 import KpiCard from "@/components/dashboard/KpiCard";
 import AgingChart from "@/components/dashboard/AgingChart";
 import RepLeaderboard from "@/components/dashboard/RepLeaderboard";
@@ -37,6 +38,28 @@ export default function Dashboard() {
 
   const meeting = useMemo(() => meetings?.find((m) => m.id === selectedId) || meetings?.[0], [meetings, selectedId]);
   const k = useMemo(() => (meeting ? meetingKpis(meeting, company) : null), [meeting, company]);
+
+  // Previous week's meeting = latest meeting dated strictly before the selected one.
+  const prev = useMemo(() => {
+    if (!meeting || !meetings?.length) return null;
+    return meetings
+      .filter((m) => m.id !== meeting.id && (m.meeting_date || "") < (meeting.meeting_date || ""))
+      .sort((a, b) => (b.meeting_date || "").localeCompare(a.meeting_date || ""))[0] || null;
+  }, [meetings, meeting]);
+  const pk = useMemo(() => (prev ? meetingKpis(prev, company) : null), [prev, company]);
+
+  const dso = meeting ? dsoDays(meeting, company) : null;
+  const prevDso = prev ? dsoDays(prev, company) : null;
+  const weeklySales = meeting ? salesValueTotal(meeting, company) : 0;
+
+  // Build a KpiCard delta: goodWhenDown=true for dues-like numbers.
+  const mkDelta = (cur, prevVal, { goodWhenDown = false, fmt = formatINR } = {}) => {
+    if (prevVal == null) return null;
+    const diff = cur - prevVal;
+    const dir = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
+    const good = dir === "flat" ? true : goodWhenDown ? dir === "down" : dir === "up";
+    return { dir, good, text: fmt(Math.abs(diff)) };
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-32" data-testid="dashboard-loading"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -80,12 +103,23 @@ export default function Dashboard() {
         <ExportActions meeting={meeting} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KpiCard testid="kpi-total-outstanding" label="Total Outstanding" value={formatINR(k.totalOutstanding)} sub="90+60+30+15+Other (all dues)" icon={Wallet} delay={0} />
-        <KpiCard testid="kpi-90-day" label="90-Day Overdue" value={formatINR(k.d90)} accent="danger" sub={`${(k.d90Share * 100).toFixed(0)}% of total outstanding`} icon={AlertOctagon} delay={0.06} />
-        <KpiCard testid="kpi-collected" label="Collected This Week" value={formatINR(k.collected)} accent="success" sub={`${formatINR(k.collPerDay)} per day`} icon={HandCoins} delay={0.12} />
-        <KpiCard testid="kpi-collection-pct" label="Collection %" value={`${k.collPct.toFixed(1)}%`} accent={k.collPct >= 12 ? "success" : k.collPct >= 6 ? "warning" : "danger"} sub="Collected ÷ New Target" icon={Gauge} delay={0.18} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+        <KpiCard testid="kpi-total-outstanding" label="Total Outstanding" value={formatINR(k.totalOutstanding)} sub="90+60+30+15+Other (all dues)" icon={Wallet} delay={0}
+                 delta={mkDelta(k.totalOutstanding, pk?.totalOutstanding, { goodWhenDown: true })} />
+        <KpiCard testid="kpi-90-day" label="90-Day Overdue" value={formatINR(k.d90)} accent="danger" sub={`${(k.d90Share * 100).toFixed(0)}% of total outstanding`} icon={AlertOctagon} delay={0.06}
+                 delta={mkDelta(k.d90, pk?.d90, { goodWhenDown: true })} />
+        <KpiCard testid="kpi-collected" label="Collected This Week" value={formatINR(k.collected)} accent="success" sub={`${formatINR(k.collPerDay)} per day`} icon={HandCoins} delay={0.12}
+                 delta={mkDelta(k.collected, pk?.collected)} />
+        <KpiCard testid="kpi-collection-pct" label="Collection %" value={`${k.collPct.toFixed(1)}%`} accent={k.collPct >= 12 ? "success" : k.collPct >= 6 ? "warning" : "danger"} sub="Collected ÷ New Target" icon={Gauge} delay={0.18}
+                 delta={mkDelta(k.collPct, pk?.collPct, { fmt: (n) => `${n.toFixed(1)} pts` })} />
+        <KpiCard testid="kpi-dso" label="DSO" value={dso == null ? "—" : `${Math.round(dso)} days`}
+                 accent={dso == null ? "default" : dso <= 45 ? "success" : dso <= 90 ? "warning" : "danger"}
+                 sub={dso == null ? "Enter branch sales value to compute" : `Outstanding ÷ daily sales (${formatINR(weeklySales / WORKING_DAYS)}/day)`}
+                 icon={Hourglass} delay={0.24}
+                 delta={dso != null && prevDso != null ? mkDelta(dso, prevDso, { goodWhenDown: true, fmt: (n) => `${n.toFixed(0)} days` }) : null} />
       </div>
+
+      <WowStrip meeting={meeting} prev={prev} company={company} />
 
       <BriefingPanel meetingId={meeting.id} />
 
