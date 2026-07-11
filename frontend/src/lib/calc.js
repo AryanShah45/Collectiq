@@ -58,21 +58,6 @@ export function meetingKpis(meeting, company) {
   };
 }
 
-// Total weekly sales value (₹) across branches, company-filtered.
-export function salesValueTotal(meeting, company) {
-  return (meeting?.branches || []).reduce((s, b) => s + amt(b.sales?.value, company), 0);
-}
-
-// Days Sales Outstanding: how many days of sales the outstanding represents.
-// DSO = outstanding ÷ (weekly sales value ÷ working days). Null when no sales
-// value has been entered for the week.
-export function dsoDays(meeting, company) {
-  const sales = salesValueTotal(meeting, company);
-  if (!sales) return null;
-  const { totalOutstanding } = meetingKpis(meeting, company);
-  return totalOutstanding / (sales / WORKING_DAYS);
-}
-
 export function repRows(meeting, company) {
   return (meeting?.reps || []).map((r) => {
     const ag = r.aging || {};
