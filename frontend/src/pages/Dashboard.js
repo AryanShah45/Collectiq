@@ -131,7 +131,7 @@ export default function Dashboard() {
         </TabsContent>
 
         <TabsContent value="branches" className="mt-6">
-          <BranchSection meeting={meeting} company={company} />
+          <BranchSection meeting={meeting} prev={prev} company={company} />
         </TabsContent>
 
         <TabsContent value="marketing" className="mt-6">

@@ -4,7 +4,66 @@ import { useAuth } from "@/context/AuthContext";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
-import { Boxes, Truck, Undo2 } from "lucide-react";
+import { Boxes, Truck, Undo2, TrendingUp } from "lucide-react";
+
+// Totals across all branches for one meeting (company-filtered).
+function branchTotals(meeting, company) {
+  return branchRows(meeting, company).reduce(
+    (a, b) => ({
+      purchaseTons: a.purchaseTons + b.purchaseTons,
+      salesTons: a.salesTons + b.salesTons,
+      purchaseValue: a.purchaseValue + b.purchaseValue,
+      salesValue: a.salesValue + b.salesValue,
+      returnAmount: a.returnAmount + b.returnAmount,
+      returnCount: a.returnCount + b.returnCount,
+    }),
+    { purchaseTons: 0, salesTons: 0, purchaseValue: 0, salesValue: 0, returnAmount: 0, returnCount: 0 }
+  );
+}
+
+// Last week vs current week for sales & purchase (tons + rupee value + returns).
+function BranchWowStrip({ meeting, prev, company }) {
+  if (!prev) return null;
+  const cur = branchTotals(meeting, company);
+  const old = branchTotals(prev, company);
+  const items = [
+    { label: "Purchase (Tons)", cur: cur.purchaseTons, diff: cur.purchaseTons - old.purchaseTons, fmt: formatTons, tone: "neutral" },
+    { label: "Sales (Tons)", cur: cur.salesTons, diff: cur.salesTons - old.salesTons, fmt: formatTons, tone: "growth" },
+    { label: "Purchase ₹", cur: cur.purchaseValue, diff: cur.purchaseValue - old.purchaseValue, fmt: formatINR, tone: "neutral" },
+    { label: "Sales ₹", cur: cur.salesValue, diff: cur.salesValue - old.salesValue, fmt: formatINR, tone: "growth" },
+    { label: "Return ₹", cur: cur.returnAmount, diff: cur.returnAmount - old.returnAmount, fmt: formatINR, tone: "inverse" },
+    { label: "Returns (count)", cur: cur.returnCount, diff: cur.returnCount - old.returnCount, fmt: (n) => `${Math.round(n)}`, tone: "inverse" },
+  ];
+  return (
+    <Card className="p-5 shadow-none" data-testid="branch-wow-strip">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Sales &amp; Purchase — Last Week vs This Week</h3>
+        <span className="text-[11px] text-muted-foreground">vs week of {prev.week_label || prev.meeting_date}</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        {items.map((it) => {
+          const dir = it.diff > 0 ? "up" : it.diff < 0 ? "down" : "flat";
+          let color = "text-muted-foreground";
+          if (dir !== "flat") {
+            if (it.tone === "growth") color = dir === "up" ? "text-[#16A34A]" : "text-[#DC2626]";
+            else if (it.tone === "inverse") color = dir === "up" ? "text-[#DC2626]" : "text-[#16A34A]";
+            else color = "text-foreground";
+          }
+          const arrow = dir === "up" ? "▲" : dir === "down" ? "▼" : "•";
+          return (
+            <div key={it.label} className="rounded-md border border-border px-3 py-2.5 bg-secondary/30" data-testid={`branch-wow-${it.label}`}>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{it.label}</div>
+              <div className="font-mono tabular-nums text-sm mt-1">{it.fmt(it.cur)}</div>
+              <div className={`font-mono tabular-nums text-xs mt-0.5 ${color}`}>
+                {arrow} {it.fmt(Math.abs(it.diff))} <span className="text-muted-foreground font-sans">vs last wk</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
 
 function DirectSaleCard({ rows, companyA, companyB }) {
   const ds = rows.find((b) => {
@@ -52,7 +111,7 @@ function DirectSaleCard({ rows, companyA, companyB }) {
   );
 }
 
-export default function BranchSection({ meeting, company }) {
+export default function BranchSection({ meeting, prev, company }) {
   const { companyA, companyB } = useAuth();
   const rows = branchRows(meeting, company);
 
@@ -89,6 +148,7 @@ export default function BranchSection({ meeting, company }) {
 
   return (
     <div className="space-y-6" data-testid="branch-section">
+      <BranchWowStrip meeting={meeting} prev={prev} company={company} />
       <DirectSaleCard rows={rows} companyA={companyA} companyB={companyB} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
