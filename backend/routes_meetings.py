@@ -49,16 +49,25 @@ class PurchaseSales(BaseModel):
     value: Amount = Field(default_factory=Amount)
 
 
+class SalesReturn(BaseModel):
+    # Returned goods per branch: rupee amount + number of return instances,
+    # each split MBS/MCORP.
+    amount: Amount = Field(default_factory=Amount)
+    count: Amount = Field(default_factory=Amount)
+
+
 class Branch(BaseModel):
     name: str
     purchase: PurchaseSales = Field(default_factory=PurchaseSales)
     sales: PurchaseSales = Field(default_factory=PurchaseSales)
+    sales_return: SalesReturn = Field(default_factory=SalesReturn)
 
 
 class BranchSale(BaseModel):
-    """A marketing person's sales tonnage attributed to one branch (MBS/MCORP)."""
+    """A marketing person's sales attributed to one branch (MBS/MCORP)."""
     name: str = ""
     tons: Amount = Field(default_factory=Amount)
+    value: Amount = Field(default_factory=Amount)
 
 
 class Quotation(BaseModel):

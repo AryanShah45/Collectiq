@@ -99,6 +99,10 @@ export function branchRows(meeting, company) {
       name: b.name,
       purchaseTons,
       salesTons,
+      purchaseValue: amt(b.purchase?.value, company),
+      salesValue: amt(b.sales?.value, company),
+      returnAmount: amt(b.sales_return?.amount, company),
+      returnCount: amt(b.sales_return?.count, company),
       purchasePerDay: purchaseTons / WORKING_DAYS,
       salesPerDay: salesTons / WORKING_DAYS,
       purchaseTonsMbs: amt(b.purchase?.tons, "mbs"),
@@ -130,7 +134,10 @@ export function marketingRepRows(meeting, company) {
       mcorp: s.tons?.mcorp || 0,
       total: (s.tons?.mbs || 0) + (s.tons?.mcorp || 0),
       value: amt(s.tons, company),
+      // rupee value of the sales attributed to this branch (company-filtered)
+      salesValue: amt(s.value, company),
     }));
+    const totalSalesValue = branchSales.reduce((acc, b) => acc + b.salesValue, 0);
     // achieve% of tons uses ALL sales by the person (both companies + all branches)
     const totalSalesTons = bs.reduce((acc, s) => acc + (s.tons?.mbs || 0) + (s.tons?.mcorp || 0), 0);
     // sales filtered by the company toggle (for the per-company view total)
@@ -147,6 +154,7 @@ export function marketingRepRows(meeting, company) {
       branchSales,
       salesTonsView,
       totalSalesTons,
+      totalSalesValue,
       totalVisit,
       targetTons,
       targetParty,
@@ -233,7 +241,12 @@ export function emptyRep(name = "") {
 }
 
 export function emptyBranch(name = "") {
-  return { name, purchase: { tons: z() }, sales: { tons: z() } };
+  return {
+    name,
+    purchase: { tons: z(), value: z() },
+    sales: { tons: z(), value: z() },
+    sales_return: { amount: z(), count: z() },
+  };
 }
 
 export function emptyMarketingRep(name = "") {

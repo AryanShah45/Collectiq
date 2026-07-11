@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { marketingRepRows, formatTons } from "@/lib/calc";
+import { marketingRepRows, formatTons, formatINR } from "@/lib/calc";
 import QuotationFunnel from "@/components/dashboard/QuotationFunnel";
 import { Megaphone, Target } from "lucide-react";
 
@@ -29,11 +29,15 @@ export default function MarketingSection({ meeting, company }) {
   rows.forEach((r) => r.branchSales.forEach((b) => { if (b.name && !branchNames.includes(b.name)) branchNames.push(b.name); }));
 
   const branchTotals = {};
-  branchNames.forEach((n) => (branchTotals[n] = 0));
-  let tSales = 0;
+  const branchValueTotals = {};
+  branchNames.forEach((n) => { branchTotals[n] = 0; branchValueTotals[n] = 0; });
+  let tSales = 0, tSalesValue = 0;
   rows.forEach((r) => {
-    r.branchSales.forEach((b) => { if (branchTotals[b.name] != null) branchTotals[b.name] += b.value; });
+    r.branchSales.forEach((b) => {
+      if (branchTotals[b.name] != null) { branchTotals[b.name] += b.value; branchValueTotals[b.name] += b.salesValue || 0; }
+    });
     tSales += r.salesTonsView;
+    tSalesValue += r.totalSalesValue || 0;
   });
 
   return (
@@ -89,7 +93,7 @@ export default function MarketingSection({ meeting, company }) {
         <div className="p-6 pb-3">
           <h3 className="text-base font-medium flex items-center gap-2"><Target className="h-4 w-4" /> Sales by Branch &amp; Target Achievement</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Sales (Tons) bifurcated by branch per person. Achieve%/Tons = total sales (both companies, all branches) ÷ Target Tons.
+            Sales (Tons, with ₹ value beneath) bifurcated by branch per person. Achieve%/Tons = total sales (both companies, all branches) ÷ Target Tons.
             Achieve%/Party = total visits ÷ Target Party.
           </p>
         </div>
@@ -113,9 +117,21 @@ export default function MarketingSection({ meeting, company }) {
                   <td className="text-left px-4 py-2.5 text-sm font-medium">{r.name}</td>
                   {branchNames.map((n) => {
                     const b = r.branchSales.find((x) => x.name === n);
-                    return <td key={n} className="px-3 py-2.5 font-mono text-xs border-l border-border/60 text-[#16A34A]">{b ? formatTons(b.value) : <span className="text-muted-foreground/40">—</span>}</td>;
+                    return (
+                      <td key={n} className="px-3 py-2.5 font-mono text-xs border-l border-border/60 text-[#16A34A]">
+                        {b ? (
+                          <>
+                            {formatTons(b.value)}
+                            {b.salesValue ? <div className="text-[10px] text-muted-foreground">{formatINR(b.salesValue)}</div> : null}
+                          </>
+                        ) : <span className="text-muted-foreground/40">—</span>}
+                      </td>
+                    );
                   })}
-                  <td className="px-3 py-2.5 font-mono text-xs border-l border-border bg-secondary/40 font-semibold">{formatTons(r.salesTonsView)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs border-l border-border bg-secondary/40 font-semibold">
+                    {formatTons(r.salesTonsView)}
+                    {r.totalSalesValue ? <div className="text-[10px] text-muted-foreground font-normal">{formatINR(r.totalSalesValue)}</div> : null}
+                  </td>
                   <td className="px-3 py-2.5 font-mono text-xs border-l border-border">{r.targetTons || "—"}</td>
                   <td className="px-3 py-2.5"><Pct v={r.achieveTonsPct} /></td>
                   <td className="px-3 py-2.5 font-mono text-xs border-l border-border">{r.totalVisit}</td>
@@ -129,8 +145,16 @@ export default function MarketingSection({ meeting, company }) {
               <tfoot>
                 <tr className="border-t-2 border-black bg-secondary/60 font-semibold">
                   <td className="text-left px-4 py-2.5 text-xs uppercase tracking-wider">Total</td>
-                  {branchNames.map((n) => <td key={n} className="px-3 py-2.5 font-mono text-xs border-l border-border/60">{formatTons(branchTotals[n])}</td>)}
-                  <td className="px-3 py-2.5 font-mono text-xs border-l border-border bg-secondary/40">{formatTons(tSales)}</td>
+                  {branchNames.map((n) => (
+                    <td key={n} className="px-3 py-2.5 font-mono text-xs border-l border-border/60">
+                      {formatTons(branchTotals[n])}
+                      {branchValueTotals[n] ? <div className="text-[10px] text-muted-foreground font-normal">{formatINR(branchValueTotals[n])}</div> : null}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2.5 font-mono text-xs border-l border-border bg-secondary/40">
+                    {formatTons(tSales)}
+                    {tSalesValue ? <div className="text-[10px] text-muted-foreground font-normal">{formatINR(tSalesValue)}</div> : null}
+                  </td>
                   <td className="px-3 py-2.5" colSpan={5} />
                 </tr>
               </tfoot>
