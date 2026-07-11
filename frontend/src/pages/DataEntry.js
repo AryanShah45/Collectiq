@@ -355,6 +355,19 @@ export default function DataEntry() {
                   </div>
                 );
               })()}
+              {(() => {
+                const keys = ["d90", "d60", "d30", "d15", "othera"];
+                const sumMbs = keys.reduce((s, k) => s + (rep.aging[k]?.mbs || 0), 0);
+                const sumMcorp = keys.reduce((s, k) => s + (rep.aging[k]?.mcorp || 0), 0);
+                return (
+                  <div className="grid grid-cols-12 gap-3 items-center rounded-md border-2 border-foreground/80 bg-foreground text-background px-3 py-2.5" data-testid={`rep-${i}-aging-sum-row`}>
+                    <span className="col-span-2 text-[11px] font-semibold uppercase tracking-wider">All Buckets</span>
+                    <div className="col-span-3 text-center font-mono tabular-nums text-sm font-semibold" data-testid={`rep-${i}-aging-sum-mbs`}>{formatINR(sumMbs)}</div>
+                    <div className="col-span-3 text-center font-mono tabular-nums text-sm font-semibold" data-testid={`rep-${i}-aging-sum-mcorp`}>{formatINR(sumMcorp)}</div>
+                    <div className="col-span-4 text-center font-mono tabular-nums text-base font-bold" data-testid={`rep-${i}-aging-sum-total`}>{formatINR(sumMbs + sumMcorp)}</div>
+                  </div>
+                );
+              })()}
             </div>
             <Separator className="my-4" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
