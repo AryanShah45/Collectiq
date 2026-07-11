@@ -31,15 +31,25 @@ def _amt(a):
     return (a.get("mbs", 0) or 0), (a.get("mcorp", 0) or 0)
 
 
+def _inr_group(n):
+    """Indian digit grouping: 20680000 -> 2,06,80,000."""
+    s = f"{abs(n):.0f}"
+    if len(s) > 3:
+        head, tail = s[:-3], s[-3:]
+        parts = []
+        while len(head) > 2:
+            parts.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            parts.insert(0, head)
+        s = ",".join(parts + [tail])
+    return s
+
+
 def _inr(n):
     n = float(n or 0)
     sign = "-" if n < 0 else ""
-    n = abs(n)
-    if n >= 1e7:
-        return f"{sign}{n/1e7:.2f} Cr"
-    if n >= 1e5:
-        return f"{sign}{n/1e5:.2f} L"
-    return f"{sign}{n:,.0f}"
+    return f"{sign}{_inr_group(n)}"
 
 
 # ============================== PDF ==============================

@@ -153,7 +153,7 @@ export default function Trends() {
             <div className="space-y-6">
               <Card className="p-6 shadow-none">
                 <h3 className="text-base font-medium mb-1">Outstanding by Aging Bucket</h3>
-                <p className="text-xs text-muted-foreground mb-5">Stacked outstanding over time (₹ in Crore)</p>
+                <p className="text-xs text-muted-foreground mb-5">Stacked outstanding over time (₹)</p>
                 <div className="h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -163,7 +163,7 @@ export default function Trends() {
                         ))}
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" />
-                      <XAxis dataKey="label" {...axis} /><YAxis tickFormatter={formatCr} {...axis} />
+                      <XAxis dataKey="label" {...axis} /><YAxis width={92} tickFormatter={formatCr} {...axis} />
                       <Tooltip content={moneyTip} /><Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
                       <Area type="monotone" dataKey="d30" stackId="1" name="30 Days" stroke="#2563EB" fill="url(#g-d30)" />
                       <Area type="monotone" dataKey="d60" stackId="1" name="60 Days" stroke="#F59E0B" fill="url(#g-d60)" />
@@ -184,9 +184,9 @@ export default function Trends() {
                 </Card>
                 <Card className="p-6 shadow-none">
                   <h3 className="text-base font-medium mb-1">Outstanding vs Collected</h3>
-                  <p className="text-xs text-muted-foreground mb-5">₹ in Crore</p>
+                  <p className="text-xs text-muted-foreground mb-5">in ₹</p>
                   <div className="h-[280px]"><ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" /><XAxis dataKey="label" {...axis} /><YAxis tickFormatter={formatCr} {...axis} /><Tooltip content={moneyTip} /><Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
+                    <LineChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" /><XAxis dataKey="label" {...axis} /><YAxis width={92} tickFormatter={formatCr} {...axis} /><Tooltip content={moneyTip} /><Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
                       <Line type="monotone" dataKey="outstanding" name="Outstanding" stroke="#111827" strokeWidth={2.5} dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="collected" name="Collected" stroke="#16A34A" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} /></LineChart>
                   </ResponsiveContainer></div>
@@ -201,9 +201,9 @@ export default function Trends() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="p-6 shadow-none">
                   <h3 className="text-base font-medium mb-1">Sales vs Purchase (Value)</h3>
-                  <p className="text-xs text-muted-foreground mb-5">₹ in Crore over time</p>
+                  <p className="text-xs text-muted-foreground mb-5">₹ over time</p>
                   <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" /><XAxis dataKey="label" {...axis} /><YAxis tickFormatter={formatCr} {...axis} /><Tooltip content={moneyTip} /><Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
+                    <LineChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" /><XAxis dataKey="label" {...axis} /><YAxis width={92} tickFormatter={formatCr} {...axis} /><Tooltip content={moneyTip} /><Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
                       <Line type="monotone" dataKey="salesValue" name="Sales" stroke="#16A34A" strokeWidth={2.5} dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="purchaseValue" name="Purchase" stroke="#DC2626" strokeWidth={2.5} dot={{ r: 3 }} /></LineChart>
                   </ResponsiveContainer></div>
@@ -310,16 +310,16 @@ export default function Trends() {
                 <p className="text-xs text-muted-foreground mb-5">Does collection efficiency track sales? (dual axis)</p>
                 <div className="h-[320px]"><ResponsiveContainer width="100%" height="100%">
                   <LineChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" /><XAxis dataKey="label" {...axis} />
-                    <YAxis yAxisId="l" unit="%" {...axis} /><YAxis yAxisId="r" orientation="right" tickFormatter={formatCr} {...axis} /><Tooltip content={moneyTip} /><Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
+                    <YAxis yAxisId="l" unit="%" {...axis} /><YAxis yAxisId="r" orientation="right" width={92} tickFormatter={formatCr} {...axis} /><Tooltip content={moneyTip} /><Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
                     <Line yAxisId="l" type="monotone" dataKey="collPct" name="Collection %" stroke="#16A34A" strokeWidth={2.5} dot={{ r: 3 }} />
                     <Line yAxisId="r" type="monotone" dataKey="salesValue" name="Sales" stroke="#2563EB" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} /></LineChart>
                 </ResponsiveContainer></div>
               </Card>
               <Card className="p-6 shadow-none">
                 <h3 className="text-base font-medium mb-1">Net Sales − Purchase Position</h3>
-                <p className="text-xs text-muted-foreground mb-5">Weekly net (₹ in Crore)</p>
+                <p className="text-xs text-muted-foreground mb-5">Weekly net (₹)</p>
                 <div className="h-[280px]"><ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" /><XAxis dataKey="label" {...axis} /><YAxis tickFormatter={formatCr} {...axis} /><Tooltip content={moneyTip} />
+                  <BarChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" /><XAxis dataKey="label" {...axis} /><YAxis width={92} tickFormatter={formatCr} {...axis} /><Tooltip content={moneyTip} />
                     <Bar dataKey="netValue" name="Net" radius={[3, 3, 0, 0]} fill="#111827" /></BarChart>
                 </ResponsiveContainer></div>
               </Card>

@@ -19,17 +19,15 @@ export function amt(a, company) {
   return (a.mbs || 0) + (a.mcorp || 0);
 }
 
+// Full Indian-digit style, never abbreviated: ₹2,06,80,000 (no Cr/L/K).
 export function formatINR(n) {
   const v = Number(n) || 0;
   const sign = v < 0 ? "-" : "";
-  const x = Math.abs(v);
-  if (x >= 1e7) return `${sign}₹${(x / 1e7).toFixed(2)} Cr`;
-  if (x >= 1e5) return `${sign}₹${(x / 1e5).toFixed(2)} L`;
-  if (x >= 1e3) return `${sign}₹${(x / 1e3).toFixed(1)}K`;
-  return `${sign}₹${x.toFixed(0)}`;
+  return `${sign}₹${Math.abs(Math.round(v)).toLocaleString("en-IN")}`;
 }
 
-export const formatCr = (n) => ((Number(n) || 0) / 1e7).toFixed(1);
+// Axis/label formatter — full Indian-grouped number without the ₹ symbol.
+export const formatCr = (n) => Math.round(Number(n) || 0).toLocaleString("en-IN");
 export const formatNum = (n) => (Number(n) || 0).toLocaleString("en-IN");
 export const formatTons = (n) => `${(Number(n) || 0).toFixed(2)} T`;
 
