@@ -10,7 +10,7 @@ import { Activity, Loader2, ShieldCheck } from "lucide-react";
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@company.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,8 +20,8 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
-      navigate("/");
+      const u = await login(email, password);
+      navigate(u.role === "employee" ? "/my" : "/");
     } catch (err) {
       setError(formatApiError(err.response?.data?.detail) || err.message);
     } finally {
@@ -57,7 +57,7 @@ export default function Login() {
           </div>
         </div>
         <div className="text-xs text-white/40 flex items-center gap-2">
-          <ShieldCheck className="h-3.5 w-3.5" /> Role-based access · Admin &amp; Viewer
+          <ShieldCheck className="h-3.5 w-3.5" /> Role-based access · Admin, Viewer &amp; Employee
         </div>
       </div>
 
@@ -94,11 +94,9 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-8 text-xs text-muted-foreground border border-border rounded-md p-4 bg-secondary/40">
-            <div className="font-medium text-foreground mb-1">Demo accounts</div>
-            <div>Admin — admin@company.com / Admin@123</div>
-            <div>Viewer — viewer@company.com / Viewer@123</div>
-          </div>
+          <p className="mt-8 text-xs text-muted-foreground">
+            No account? Ask your administrator to create one for you.
+          </p>
         </div>
       </div>
     </div>

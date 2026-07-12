@@ -2,8 +2,8 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 
-export default function ProtectedRoute({ children, requireAdmin = false }) {
-  const { user, isAdmin, refresh } = useAuth();
+export default function ProtectedRoute({ children, requireAdmin = false, allowEmployee = false }) {
+  const { user, isAdmin, isEmployee } = useAuth();
 
   if (user === null) {
     return (
@@ -12,23 +12,9 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
       </div>
     );
   }
-  if (user === false) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background px-6 text-center" data-testid="session-error">
-        <p className="text-sm text-muted-foreground max-w-sm">
-          Couldn&apos;t reach the server to start your session. Please make sure the
-          backend is running, then retry.
-        </p>
-        <button
-          onClick={() => refresh()}
-          className="px-4 py-2 rounded-md bg-black text-white text-sm font-medium"
-          data-testid="session-retry"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
+  if (user === false) return <Navigate to="/login" replace />;
+  // Employees only get their personal page — never dashboards or admin pages.
+  if (isEmployee && !allowEmployee) return <Navigate to="/my" replace />;
   if (requireAdmin && !isAdmin) return <Navigate to="/" replace />;
   return children;
 }

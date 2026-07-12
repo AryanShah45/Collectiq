@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { APP_VERSION } from "@/version";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, TrendingUp, CalendarDays, FilePlus2, Users, Activity, SlidersHorizontal } from "lucide-react";
+import { LayoutDashboard, TrendingUp, CalendarDays, FilePlus2, Users, Activity, SlidersHorizontal, UserRound, LogOut } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
@@ -13,8 +13,13 @@ const navItems = [
   { to: "/users", label: "Users", icon: Users, testid: "nav-users", admin: true },
 ];
 
+const employeeNavItems = [
+  { to: "/my", label: "My Performance", icon: UserRound, testid: "nav-my", end: true },
+];
+
 export default function Layout({ children }) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isEmployee, logout } = useAuth();
+  const items = isEmployee ? employeeNavItems : navItems.filter((n) => !n.admin || isAdmin);
 
   return (
     <div className="min-h-screen bg-background">
@@ -34,7 +39,7 @@ export default function Layout({ children }) {
                 </div>
               </div>
               <nav className="hidden md:flex items-center gap-1">
-                {navItems.filter((n) => !n.admin || isAdmin).map((n) => (
+                {items.map((n) => (
                   <NavLink
                     key={n.to}
                     to={n.to}
@@ -64,11 +69,19 @@ export default function Layout({ children }) {
               >
                 {user?.role}
               </Badge>
+              <button
+                onClick={logout}
+                title="Log out"
+                data-testid="logout-button"
+                className="h-9 w-9 rounded-md border border-border flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
           {/* mobile nav */}
           <nav className="md:hidden flex items-center gap-1 overflow-x-auto pb-2">
-            {navItems.filter((n) => !n.admin || isAdmin).map((n) => (
+            {items.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}

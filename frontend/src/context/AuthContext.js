@@ -8,40 +8,14 @@ export function AuthProvider({ children }) {
   const [settings, setSettings] = useState(null);
 
   const refresh = useCallback(async () => {
-    // 1) Reuse an existing session if there is one.
+    // Reuse an existing session if there is one; otherwise the router sends
+    // the visitor to the login page.
     try {
       const me = await apiMe();
       setUser(me);
-      return;
     } catch {
-      /* no active session — fall through to auto-login below */
+      setUser(false);
     }
-
-    // 2) Login page removed — establish a session automatically so the app
-    // opens straight to the dashboard. Falls back to the seeded admin account
-    // (overridable via REACT_APP_AUTO_EMAIL / REACT_APP_AUTO_PASSWORD).
-    // Retries with backoff so a backend that is still waking up (cold start
-    // after deploy, or a hot-reload restart) doesn't strand the user.
-    const autoEmail = process.env.REACT_APP_AUTO_EMAIL || "admin@company.com";
-    const autoPassword = process.env.REACT_APP_AUTO_PASSWORD || "Admin@123";
-    const MAX_ATTEMPTS = 6;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        const u = await apiLogin(autoEmail, autoPassword);
-        setUser(u);
-        return;
-      } catch (err) {
-        const status = err?.response?.status;
-        const detail = err?.response?.data?.detail;
-        // Genuinely wrong credentials — retrying won't help, stop now.
-        if (status === 401 && detail === "Invalid email or password") break;
-        if (attempt < MAX_ATTEMPTS) {
-          // backoff: 1s, 2s, 3s, ... (caps total wait ~20s for cold starts)
-          await new Promise((r) => setTimeout(r, Math.min(attempt * 1000, 5000)));
-        }
-      }
-    }
-    setUser(false);
   }, []);
 
   const refreshSettings = useCallback(async () => {
@@ -58,7 +32,7 @@ export function AuthProvider({ children }) {
 
   // Load app settings (company names + roster) once the user is authenticated.
   useEffect(() => {
-    if (user && user.role) refreshSettings();
+    if (user && user.role && user.role !== "employee") refreshSettings();
   }, [user, refreshSettings]);
 
   const login = async (email, password) => {
@@ -77,12 +51,13 @@ export function AuthProvider({ children }) {
   };
 
   const isAdmin = !!user && user.role === "admin";
+  const isEmployee = !!user && user.role === "employee";
   const companyA = settings?.company_a || "MBS";
   const companyB = settings?.company_b || "MCORP";
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, refresh, isAdmin, settings, refreshSettings, companyA, companyB }}
+      value={{ user, login, logout, refresh, isAdmin, isEmployee, settings, refreshSettings, companyA, companyB }}
     >
       {children}
     </AuthContext.Provider>

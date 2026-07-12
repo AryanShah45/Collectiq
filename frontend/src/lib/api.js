@@ -45,6 +45,7 @@ export const getExtractStatus = (jobId) => api.get(`/extract/${jobId}`).then((r)
 // users
 export const listUsers = () => api.get("/users").then((r) => r.data);
 export const createUser = (body) => api.post("/users", body).then((r) => r.data);
+export const updateUser = ({ id, ...body }) => api.put(`/users/${id}`, body).then((r) => r.data);
 export const deleteUser = (id) => api.delete(`/users/${id}`).then((r) => r.data);
 
 // settings / roster
