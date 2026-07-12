@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { listUsers, createUser, deleteUser, formatApiError } from "@/lib/api";
+import { listUsers, createUser, updateUser, deleteUser, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, UserPlus, Trash2 } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 function initials(name) {
@@ -29,7 +29,16 @@ export default function Users() {
   const repOptions = settings?.collection_reps || [];
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({ name: "", email: "", password: "", role: "viewer", rep_name: "" });
+  const [editing, setEditing] = useState(null); // user object when editing, null when creating
+  const blank = { name: "", email: "", password: "", role: "viewer", rep_name: "" };
+  const [draft, setDraft] = useState(blank);
+
+  const startCreate = () => { setEditing(null); setDraft(blank); setOpen(true); };
+  const startEdit = (u) => {
+    setEditing(u);
+    setDraft({ name: u.name, email: u.email, password: "", role: u.role, rep_name: u.rep_name || "" });
+    setOpen(true);
+  };
 
   const create = useMutation({
     mutationFn: createUser,
@@ -37,10 +46,28 @@ export default function Users() {
       qc.invalidateQueries({ queryKey: ["users"] });
       toast.success("User created");
       setOpen(false);
-      setDraft({ name: "", email: "", password: "", role: "viewer", rep_name: "" });
+      setDraft(blank);
     },
     onError: (e) => toast.error(formatApiError(e.response?.data?.detail) || "Failed to create user"),
   });
+
+  const update = useMutation({
+    mutationFn: updateUser,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      toast.success("User updated");
+      setOpen(false);
+      setEditing(null);
+      setDraft(blank);
+    },
+    onError: (e) => toast.error(formatApiError(e.response?.data?.detail) || "Failed to update user"),
+  });
+
+  const submit = () => {
+    if (editing) update.mutate({ id: editing.id, ...draft });
+    else create.mutate(draft);
+  };
+  const busy = create.isPending || update.isPending;
 
   const del = useMutation({
     mutationFn: deleteUser,
@@ -56,12 +83,12 @@ export default function Users() {
           <h1 className="text-3xl font-semibold tracking-tighter">Users</h1>
           <p className="text-sm text-muted-foreground mt-1">Admins manage everything · viewers get read-only dashboards · employees see only their own numbers.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}>
           <DialogTrigger asChild>
-            <Button data-testid="add-user-button"><UserPlus className="h-4 w-4" /> Add User</Button>
+            <Button data-testid="add-user-button" onClick={startCreate}><UserPlus className="h-4 w-4" /> Add User</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Create User</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editing ? `Edit ${editing.name}` : "Create User"}</DialogTitle></DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Name</Label>
@@ -72,12 +99,14 @@ export default function Users() {
                 <Input type="email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} data-testid="user-email-input" />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Password</Label>
-                <Input type="password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} data-testid="user-password-input" />
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">{editing ? "New Password" : "Password"}</Label>
+                <Input type="password" value={draft.password} placeholder={editing ? "Leave blank to keep the current password" : ""}
+                       onChange={(e) => setDraft({ ...draft, password: e.target.value })} data-testid="user-password-input" />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Role</Label>
-                <Select value={draft.role} onValueChange={(v) => setDraft({ ...draft, role: v, rep_name: v === "employee" ? draft.rep_name : "" })}>
+                <Select value={draft.role} onValueChange={(v) => setDraft({ ...draft, role: v, rep_name: v === "employee" ? draft.rep_name : "" })}
+                        disabled={!!editing && editing.id === me?.id}>
                   <SelectTrigger data-testid="user-role-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Admin — full access (enter data, manage users)</SelectItem>
@@ -106,10 +135,10 @@ export default function Users() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={() => create.mutate(draft)}
-                      disabled={create.isPending || !draft.name || !draft.email || !draft.password || (draft.role === "employee" && !draft.rep_name)}
+              <Button onClick={submit}
+                      disabled={busy || !draft.name || !draft.email || (!editing && !draft.password) || (draft.role === "employee" && !draft.rep_name)}
                       data-testid="submit-user-button">
-                {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? "Save Changes" : "Create"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -139,6 +168,9 @@ export default function Users() {
                   <Badge variant="outline" className={`uppercase text-[10px] tracking-wider ${u.role === "admin" ? "border-black text-black" : "text-muted-foreground"}`}>
                     {u.role}
                   </Badge>
+                  <Button variant="ghost" size="icon" onClick={() => startEdit(u)} data-testid={`edit-user-${u.email}`}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
                   {u.id !== me?.id && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>

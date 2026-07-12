@@ -130,6 +130,14 @@ class UserCreate(BaseModel):
     rep_name: str = ""  # required for role=employee: links user to a collection rep
 
 
+class UserUpdate(BaseModel):
+    name: str
+    email: EmailStr
+    role: str
+    rep_name: str = ""
+    password: str = ""  # blank = keep the current password
+
+
 # ---------- brute force ----------
 async def _check_lockout(identifier: str):
     rec = await db.login_attempts.find_one({"identifier": identifier})
@@ -234,6 +242,36 @@ async def create_user(body: UserCreate, _: dict = Depends(require_admin)):
     res = await db.users.insert_one(doc)
     doc["_id"] = res.inserted_id
     return public_user(doc)
+
+
+@users_router.put("/{user_id}")
+async def update_user(user_id: str, body: UserUpdate, admin: dict = Depends(require_admin)):
+    target = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.role not in ("admin", "viewer", "employee"):
+        raise HTTPException(status_code=400, detail="Role must be admin, viewer or employee")
+    if body.role == "employee" and not body.rep_name.strip():
+        raise HTTPException(status_code=400, detail="Employees must be linked to a representative name")
+    # Don't let an admin remove their own admin role — that could lock everyone out.
+    if str(admin["_id"]) == user_id and body.role != "admin":
+        raise HTTPException(status_code=400, detail="You cannot change your own role")
+    email = body.email.lower().strip()
+    if email != target["email"] and await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="Email already exists")
+    update = {
+        "name": body.name.strip(),
+        "email": email,
+        "role": body.role,
+        "rep_name": body.rep_name.strip() if body.role == "employee" else "",
+    }
+    if body.password:
+        if len(body.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        update["password_hash"] = hash_password(body.password)
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update})
+    target.update(update)
+    return public_user(target)
 
 
 @users_router.delete("/{user_id}")
