@@ -25,10 +25,11 @@ function initials(name) {
 
 export default function Users() {
   const { data: users, isLoading } = useQuery({ queryKey: ["users"], queryFn: listUsers });
-  const { user: me } = useAuth();
+  const { user: me, settings } = useAuth();
+  const repOptions = settings?.collection_reps || [];
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState({ name: "", email: "", password: "", role: "viewer" });
+  const [draft, setDraft] = useState({ name: "", email: "", password: "", role: "viewer", rep_name: "" });
 
   const create = useMutation({
     mutationFn: createUser,
@@ -36,7 +37,7 @@ export default function Users() {
       qc.invalidateQueries({ queryKey: ["users"] });
       toast.success("User created");
       setOpen(false);
-      setDraft({ name: "", email: "", password: "", role: "viewer" });
+      setDraft({ name: "", email: "", password: "", role: "viewer", rep_name: "" });
     },
     onError: (e) => toast.error(formatApiError(e.response?.data?.detail) || "Failed to create user"),
   });
@@ -53,7 +54,7 @@ export default function Users() {
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-1">Access Control</div>
           <h1 className="text-3xl font-semibold tracking-tighter">Users</h1>
-          <p className="text-sm text-muted-foreground mt-1">Admins manage data; viewers get read-only dashboards.</p>
+          <p className="text-sm text-muted-foreground mt-1">Admins manage everything · viewers get read-only dashboards · employees see only their own numbers.</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -76,18 +77,38 @@ export default function Users() {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs uppercase tracking-wider text-muted-foreground">Role</Label>
-                <Select value={draft.role} onValueChange={(v) => setDraft({ ...draft, role: v })}>
+                <Select value={draft.role} onValueChange={(v) => setDraft({ ...draft, role: v, rep_name: v === "employee" ? draft.rep_name : "" })}>
                   <SelectTrigger data-testid="user-role-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="viewer">Viewer (read-only)</SelectItem>
-                    <SelectItem value="admin">Admin (full access)</SelectItem>
+                    <SelectItem value="admin">Admin — full access (enter data, manage users)</SelectItem>
+                    <SelectItem value="viewer">Viewer — read-only dashboards</SelectItem>
+                    <SelectItem value="employee">Employee — own performance only</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {draft.role === "employee" && (
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Linked Representative</Label>
+                  {repOptions.length ? (
+                    <Select value={draft.rep_name} onValueChange={(v) => setDraft({ ...draft, rep_name: v })}>
+                      <SelectTrigger data-testid="user-rep-select"><SelectValue placeholder="Pick their name from the roster" /></SelectTrigger>
+                      <SelectContent>
+                        {repOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input value={draft.rep_name} placeholder="Representative name (as entered in meetings)"
+                           onChange={(e) => setDraft({ ...draft, rep_name: e.target.value })} data-testid="user-rep-input" />
+                  )}
+                  <p className="text-[11px] text-muted-foreground">They will only see the numbers recorded under this name.</p>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={() => create.mutate(draft)} disabled={create.isPending || !draft.name || !draft.email || !draft.password} data-testid="submit-user-button">
+              <Button onClick={() => create.mutate(draft)}
+                      disabled={create.isPending || !draft.name || !draft.email || !draft.password || (draft.role === "employee" && !draft.rep_name)}
+                      data-testid="submit-user-button">
                 {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
               </Button>
             </DialogFooter>
@@ -111,7 +132,7 @@ export default function Users() {
                       {u.name}
                       {u.id === me?.id && <span className="text-[10px] text-muted-foreground">(you)</span>}
                     </div>
-                    <div className="text-xs text-muted-foreground">{u.email}</div>
+                    <div className="text-xs text-muted-foreground">{u.email}{u.rep_name ? ` · linked to ${u.rep_name}` : ""}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

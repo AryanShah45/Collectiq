@@ -3,12 +3,14 @@ import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
+import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Trends from "@/pages/Trends";
 import Meetings from "@/pages/Meetings";
 import DataEntry from "@/pages/DataEntry";
 import Users from "@/pages/Users";
 import Settings from "@/pages/Settings";
+import MyPerformance from "@/pages/MyPerformance";
 
 const withLayout = (el) => (
   <ProtectedRoute>
@@ -22,14 +24,22 @@ const withAdminLayout = (el) => (
   </ProtectedRoute>
 );
 
+const withEmployeeLayout = (el) => (
+  <ProtectedRoute allowEmployee>
+    <Layout>{el}</Layout>
+  </ProtectedRoute>
+);
+
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/login" element={<Login />} />
           <Route path="/" element={withLayout(<Dashboard />)} />
           <Route path="/trends" element={withLayout(<Trends />)} />
           <Route path="/meetings" element={withLayout(<Meetings />)} />
+          <Route path="/my" element={withEmployeeLayout(<MyPerformance />)} />
           <Route path="/data-entry" element={withAdminLayout(<DataEntry />)} />
           <Route path="/users" element={withAdminLayout(<Users />)} />
           <Route path="/settings" element={withAdminLayout(<Settings />)} />

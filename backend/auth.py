@@ -75,6 +75,8 @@ def public_user(user: dict) -> dict:
         "email": user["email"],
         "name": user.get("name", ""),
         "role": user.get("role", "viewer"),
+        # For employees: the collection-rep name whose data they may see.
+        "rep_name": user.get("rep_name", ""),
     }
 
 
@@ -106,6 +108,14 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     return user
 
 
+async def require_view(user: dict = Depends(get_current_user)) -> dict:
+    """Dashboard-level read access: admins and viewers. Employees only get
+    their own rep data, never company-wide dashboards."""
+    if user.get("role") not in ("admin", "viewer"):
+        raise HTTPException(status_code=403, detail="Dashboard access requires admin or viewer role")
+    return user
+
+
 # ---------- schemas ----------
 class LoginIn(BaseModel):
     email: EmailStr
@@ -117,6 +127,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: str = "viewer"
+    rep_name: str = ""  # required for role=employee: links user to a collection rep
 
 
 # ---------- brute force ----------
@@ -204,8 +215,12 @@ async def list_users(_: dict = Depends(require_admin)):
 @users_router.post("")
 async def create_user(body: UserCreate, _: dict = Depends(require_admin)):
     email = body.email.lower().strip()
-    if body.role not in ("admin", "viewer"):
-        raise HTTPException(status_code=400, detail="Role must be admin or viewer")
+    if body.role not in ("admin", "viewer", "employee"):
+        raise HTTPException(status_code=400, detail="Role must be admin, viewer or employee")
+    if body.role == "employee" and not body.rep_name.strip():
+        raise HTTPException(status_code=400, detail="Employees must be linked to a representative name")
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already exists")
     doc = {
@@ -213,6 +228,7 @@ async def create_user(body: UserCreate, _: dict = Depends(require_admin)):
         "password_hash": hash_password(body.password),
         "name": body.name.strip(),
         "role": body.role,
+        "rep_name": body.rep_name.strip() if body.role == "employee" else "",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     res = await db.users.insert_one(doc)
@@ -232,10 +248,12 @@ async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
 
 # ---------- seeding ----------
 async def seed_users():
+    # Only the admin account is seeded; all other users are created from the
+    # Users page. (The old always-seeded viewer@company.com default was a
+    # publicly-known credential and has been removed.)
     defaults = [
         (os.environ.get("ADMIN_EMAIL", "admin@company.com"),
          os.environ.get("ADMIN_PASSWORD", "Admin@123"), "Administrator", "admin"),
-        ("viewer@company.com", "Viewer@123", "Viewer User", "viewer"),
     ]
     for email, password, name, role in defaults:
         email = email.lower().strip()

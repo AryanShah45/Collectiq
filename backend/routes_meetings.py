@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from pydantic import BaseModel, Field
 
 from db import db
-from auth import get_current_user, require_admin
+from auth import get_current_user, require_admin, require_view
 import extraction
 import os
 import tempfile
@@ -210,13 +210,13 @@ async def _attach_last_week_targets(doc: dict, exclude_id: str = None):
 
 # ---------- routes ----------
 @meetings_router.get("/meetings")
-async def list_meetings(_: dict = Depends(get_current_user)):
+async def list_meetings(_: dict = Depends(require_view)):
     docs = await db.meetings.find({}, {"_id": 0}).sort("meeting_date", -1).to_list(500)
     return [_enrich(d) for d in docs]
 
 
 @meetings_router.get("/meetings/{meeting_id}")
-async def get_meeting(meeting_id: str, _: dict = Depends(get_current_user)):
+async def get_meeting(meeting_id: str, _: dict = Depends(require_view)):
     doc = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Meeting not found")
@@ -264,7 +264,7 @@ async def delete_meeting(meeting_id: str, _: dict = Depends(require_admin)):
 
 
 @meetings_router.get("/analytics/trends")
-async def trends(_: dict = Depends(get_current_user)):
+async def trends(_: dict = Depends(require_view)):
     docs = await db.meetings.find({}, {"_id": 0}).sort("meeting_date", 1).to_list(500)
     weekly = []
     for d in docs:
@@ -285,7 +285,7 @@ async def _company_names():
 
 
 @meetings_router.get("/analytics/report.pdf")
-async def analytics_report(_: dict = Depends(get_current_user)):
+async def analytics_report(_: dict = Depends(require_view)):
     from fastapi.responses import Response
     import export_report
     docs = await db.meetings.find({}, {"_id": 0}).sort("meeting_date", 1).to_list(500)
@@ -318,8 +318,13 @@ async def analytics_report(_: dict = Depends(get_current_user)):
 
 
 @meetings_router.get("/reps/{name}/history")
-async def rep_history(name: str, _: dict = Depends(get_current_user)):
+async def rep_history(name: str, user: dict = Depends(get_current_user)):
     target = (name or "").strip().lower()
+    # Employees may only read the history of the rep they are linked to.
+    if user.get("role") == "employee":
+        own = (user.get("rep_name") or "").strip().lower()
+        if not own or own != target:
+            raise HTTPException(status_code=403, detail="You can only view your own data")
     docs = await db.meetings.find({}, {"_id": 0}).sort("meeting_date", 1).to_list(500)
     series = []
     for d in docs:
@@ -343,7 +348,7 @@ async def rep_history(name: str, _: dict = Depends(get_current_user)):
 
 
 @meetings_router.get("/meetings/{meeting_id}/briefing")
-async def meeting_briefing(meeting_id: str, _: dict = Depends(get_current_user)):
+async def meeting_briefing(meeting_id: str, _: dict = Depends(require_view)):
     import briefing
     doc = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})
     if not doc:
@@ -356,7 +361,7 @@ async def meeting_briefing(meeting_id: str, _: dict = Depends(get_current_user))
 
 
 @meetings_router.get("/meetings/{meeting_id}/export.{fmt}")
-async def export_meeting(meeting_id: str, fmt: str, _: dict = Depends(get_current_user)):
+async def export_meeting(meeting_id: str, fmt: str, _: dict = Depends(require_view)):
     from fastapi.responses import Response
     import export_report
     doc = await db.meetings.find_one({"id": meeting_id}, {"_id": 0})

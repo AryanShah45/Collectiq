@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from db import db
-from auth import get_current_user, require_admin
+from auth import require_admin, require_view
 
 settings_router = APIRouter(prefix="/api", tags=["settings"])
 
@@ -75,7 +75,7 @@ async def seed_settings():
 
 
 @settings_router.get("/settings")
-async def read_settings(_: dict = Depends(get_current_user)):
+async def read_settings(_: dict = Depends(require_view)):
     # Any logged-in user can read settings (needed for company labels, etc.)
     return await get_settings_doc()
 
