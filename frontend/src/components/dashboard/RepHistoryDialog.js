@@ -5,9 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { X, Loader2, TrendingUp } from "lucide-react";
 
 function fmtAxis(n) {
-  if (Math.abs(n) >= 1e7) return `${(n / 1e7).toFixed(1)}Cr`;
-  if (Math.abs(n) >= 1e5) return `${(n / 1e5).toFixed(1)}L`;
-  return `${n}`;
+  return Math.round(Number(n) || 0).toLocaleString("en-IN");
 }
 
 export default function RepHistoryDialog({ name, onClose }) {
@@ -42,7 +40,7 @@ export default function RepHistoryDialog({ name, onClose }) {
                   <LineChart data={points} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11 }} />
+                    <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 10 }} width={86} />
                     <Tooltip formatter={(v) => formatINR(v)} />
                     <Legend />
                     <Line type="monotone" dataKey="outstanding" name="Outstanding" stroke="#000000" strokeWidth={2} dot={{ r: 3 }} />

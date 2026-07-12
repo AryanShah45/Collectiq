@@ -169,6 +169,33 @@ That's your live app. Log in with `admin@company.com` and the password you set.
 
 ---
 
+## Connect a secured cloud database (MongoDB Atlas, free)
+
+By default Docker Compose runs its own MongoDB container, and the local demo
+mode (`MONGO_URL=memory`) keeps everything in memory — fine for trying it out,
+but data is safest in a managed, encrypted cloud database. MongoDB Atlas has a
+free tier and the app already speaks TLS to it (with a pinned CA bundle), so
+this is a 10-minute job:
+
+1. Create a free account at https://www.mongodb.com/atlas and make an **M0
+   (free)** cluster.
+2. **Database Access** → *Add New Database User* → username + a strong
+   password (role: *Read and write to any database*).
+3. **Network Access** → *Add IP Address* → add your server's IP. Avoid
+   `0.0.0.0/0` (allow-all) in production.
+4. Click **Connect → Drivers** on the cluster and copy the connection string.
+   It looks like:
+   `mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority`
+5. Paste it into `backend/.env` as `MONGO_URL=...` (replace USER/PASSWORD),
+   then restart the app. On Render, set the same value for the `MONGO_URL`
+   environment variable instead.
+
+That's it — the app creates its indexes and seed data automatically on first
+start. Your data is now stored encrypted-in-transit (TLS) and encrypted-at-rest
+(Atlas default), with daily automated backups available on the Atlas side.
+
+---
+
 ## AI document reading (optional, free)
 
 The "upload the meeting PDF/Excel and auto-fill the numbers" feature uses Google

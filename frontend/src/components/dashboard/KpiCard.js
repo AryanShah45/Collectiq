@@ -1,7 +1,20 @@
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 
-export default function KpiCard({ label, value, sub, accent = "default", icon: Icon, delay = 0, testid }) {
+// delta: { dir: "up"|"down"|"flat", good: bool, text: string }
+function DeltaLine({ delta }) {
+  if (!delta) return null;
+  const color = delta.dir === "flat" ? "text-muted-foreground" : delta.good ? "text-[#16A34A]" : "text-[#DC2626]";
+  const arrow = delta.dir === "up" ? "▲" : delta.dir === "down" ? "▼" : "•";
+  return (
+    <div className={`mt-1.5 text-xs font-mono tabular-nums flex items-center gap-1 ${color}`} data-testid="kpi-delta">
+      <span>{arrow}</span> {delta.text}
+      <span className="text-muted-foreground font-sans">vs last week</span>
+    </div>
+  );
+}
+
+export default function KpiCard({ label, value, sub, accent = "default", icon: Icon, delay = 0, testid, delta }) {
   const accents = {
     default: "text-foreground",
     danger: "text-[#DC2626]",
@@ -21,6 +34,7 @@ export default function KpiCard({ label, value, sub, accent = "default", icon: I
           {Icon && <Icon className={`h-4 w-4 ${accents[accent]}`} />}
         </div>
         <div className={`mt-3 font-mono tabular-nums text-2xl lg:text-3xl tracking-tight ${accents[accent]}`}>{value}</div>
+        <DeltaLine delta={delta} />
         {sub && <div className="mt-1.5 text-xs text-muted-foreground">{sub}</div>}
       </Card>
     </motion.div>

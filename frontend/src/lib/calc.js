@@ -19,17 +19,15 @@ export function amt(a, company) {
   return (a.mbs || 0) + (a.mcorp || 0);
 }
 
+// Full Indian-digit style, never abbreviated: ₹2,06,80,000 (no Cr/L/K).
 export function formatINR(n) {
   const v = Number(n) || 0;
   const sign = v < 0 ? "-" : "";
-  const x = Math.abs(v);
-  if (x >= 1e7) return `${sign}₹${(x / 1e7).toFixed(2)} Cr`;
-  if (x >= 1e5) return `${sign}₹${(x / 1e5).toFixed(2)} L`;
-  if (x >= 1e3) return `${sign}₹${(x / 1e3).toFixed(1)}K`;
-  return `${sign}₹${x.toFixed(0)}`;
+  return `${sign}₹${Math.abs(Math.round(v)).toLocaleString("en-IN")}`;
 }
 
-export const formatCr = (n) => ((Number(n) || 0) / 1e7).toFixed(1);
+// Axis/label formatter — full Indian-grouped number without the ₹ symbol.
+export const formatCr = (n) => Math.round(Number(n) || 0).toLocaleString("en-IN");
 export const formatNum = (n) => (Number(n) || 0).toLocaleString("en-IN");
 export const formatTons = (n) => `${(Number(n) || 0).toFixed(2)} T`;
 
@@ -99,6 +97,10 @@ export function branchRows(meeting, company) {
       name: b.name,
       purchaseTons,
       salesTons,
+      purchaseValue: amt(b.purchase?.value, company),
+      salesValue: amt(b.sales?.value, company),
+      returnAmount: amt(b.sales_return?.amount, company),
+      returnCount: amt(b.sales_return?.count, company),
       purchasePerDay: purchaseTons / WORKING_DAYS,
       salesPerDay: salesTons / WORKING_DAYS,
       purchaseTonsMbs: amt(b.purchase?.tons, "mbs"),
@@ -130,7 +132,10 @@ export function marketingRepRows(meeting, company) {
       mcorp: s.tons?.mcorp || 0,
       total: (s.tons?.mbs || 0) + (s.tons?.mcorp || 0),
       value: amt(s.tons, company),
+      // rupee value of the sales attributed to this branch (company-filtered)
+      salesValue: amt(s.value, company),
     }));
+    const totalSalesValue = branchSales.reduce((acc, b) => acc + b.salesValue, 0);
     // achieve% of tons uses ALL sales by the person (both companies + all branches)
     const totalSalesTons = bs.reduce((acc, s) => acc + (s.tons?.mbs || 0) + (s.tons?.mcorp || 0), 0);
     // sales filtered by the company toggle (for the per-company view total)
@@ -147,6 +152,7 @@ export function marketingRepRows(meeting, company) {
       branchSales,
       salesTonsView,
       totalSalesTons,
+      totalSalesValue,
       totalVisit,
       targetTons,
       targetParty,
@@ -233,7 +239,12 @@ export function emptyRep(name = "") {
 }
 
 export function emptyBranch(name = "") {
-  return { name, purchase: { tons: z() }, sales: { tons: z() } };
+  return {
+    name,
+    purchase: { tons: z(), value: z() },
+    sales: { tons: z(), value: z() },
+    sales_return: { amount: z(), count: z() },
+  };
 }
 
 export function emptyMarketingRep(name = "") {

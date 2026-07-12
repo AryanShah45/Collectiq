@@ -74,8 +74,9 @@ function normalizeBranch(b) {
   const m = (x) => ({ mbs: Number(x?.mbs) || 0, mcorp: Number(x?.mcorp) || 0 });
   return {
     name: b.name || "",
-    purchase: { tons: m(b.purchase?.tons) },
-    sales: { tons: m(b.sales?.tons) },
+    purchase: { tons: m(b.purchase?.tons), value: m(b.purchase?.value) },
+    sales: { tons: m(b.sales?.tons), value: m(b.sales?.value) },
+    sales_return: { amount: m(b.sales_return?.amount), count: m(b.sales_return?.count) },
   };
 }
 function normalizeMkt(m) {
@@ -85,7 +86,7 @@ function normalizeMkt(m) {
   return {
     name: m.name || "",
     visit: a(m.visit), inquiry: a(m.inquiry), inquiry_conform: a(m.inquiry_conform), order_loss: a(m.order_loss),
-    branch_sales: (m.branch_sales || []).map((b) => ({ name: b.name || "", tons: a(b.tons) })),
+    branch_sales: (m.branch_sales || []).map((b) => ({ name: b.name || "", tons: a(b.tons), value: a(b.value) })),
     target_tons: Number(m.target_tons) || 0,
     target_party: Number(m.target_party) || 0,
   };
@@ -168,16 +169,16 @@ export default function DataEntry() {
 
   const update = (mutator) => setForm((prev) => { const next = structuredClone(prev); mutator(next); return next; });
 
-  // marketing branch-sales helpers (sales tons per branch, per company)
-  const getMktBranchSale = (m, branchName) =>
-    (m.branch_sales || []).find((x) => x.name === branchName)?.tons || { mbs: 0, mcorp: 0 };
-  const setMktBranchSale = (i, branchName, fld, v) => update((f) => {
+  // marketing branch-sales helpers (sales tons + rupee value per branch, per company)
+  const getMktBranchSale = (m, branchName, measure = "tons") =>
+    (m.branch_sales || []).find((x) => x.name === branchName)?.[measure] || { mbs: 0, mcorp: 0 };
+  const setMktBranchSale = (i, branchName, measure, fld, v) => update((f) => {
     const m = f.marketing_reps[i];
     if (!m.branch_sales) m.branch_sales = [];
     let bs = m.branch_sales.find((x) => x.name === branchName);
-    if (!bs) { bs = { name: branchName, tons: { mbs: 0, mcorp: 0 } }; m.branch_sales.push(bs); }
-    if (!bs.tons) bs.tons = { mbs: 0, mcorp: 0 };
-    bs.tons[fld] = v;
+    if (!bs) { bs = { name: branchName, tons: { mbs: 0, mcorp: 0 }, value: { mbs: 0, mcorp: 0 } }; m.branch_sales.push(bs); }
+    if (!bs[measure]) bs[measure] = { mbs: 0, mcorp: 0 };
+    bs[measure][fld] = v;
   });
 
   const save = useMutation({
@@ -325,22 +326,48 @@ export default function DataEntry() {
               <Button variant="ghost" size="icon" className="text-[#DC2626]" onClick={() => update((f) => f.reps.splice(i, 1))} disabled={form.reps.length === 1} data-testid={`remove-rep-${i}`}><Trash2 className="h-4 w-4" /></Button>
             </div>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Outstanding — {companyA} / {companyB} per bucket</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
-              {AGING.map(([key, label, color]) => (
-                <div key={key} className="flex items-center gap-3">
-                  <span className="flex items-center gap-2 text-sm w-24 shrink-0"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: color }} />{label}</span>
-                  <div className="flex-1"><AmountPair value={rep.aging[key]} prefix="₹" testidBase={`rep-${i}-${key}`} onChange={(fld, v) => update((f) => (f.reps[i].aging[key][fld] = v))} /></div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 flex items-center gap-3">
-              <span className="flex items-center gap-2 text-sm w-44 shrink-0">
-                <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#0EA5E9" }} />15 Days <span className="text-[11px] text-muted-foreground">({companyB} only)</span>
-              </span>
-              <div className="w-1/2 md:w-[calc(50%-1rem)]">
-                <NumInput value={rep.aging.d15?.mcorp} prefix="₹" testid={`rep-${i}-d15-mcorp`}
-                          onChange={(v) => update((f) => (f.reps[i].aging.d15.mcorp = v))} />
+            <div className="space-y-2">
+              <div className="grid grid-cols-12 gap-3 items-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <span className="col-span-2" />
+                <span className="col-span-3 text-center">{companyA}</span>
+                <span className="col-span-3 text-center">{companyB}</span>
+                <span className="col-span-4 text-center">Total ({companyA}+{companyB})</span>
               </div>
+              {AGING.map(([key, label, color]) => {
+                const tot = (rep.aging[key]?.mbs || 0) + (rep.aging[key]?.mcorp || 0);
+                return (
+                  <div key={key} className="grid grid-cols-12 gap-3 items-center rounded-md border border-border/60 bg-secondary/20 px-3 py-2">
+                    <span className="col-span-2 flex items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: color }} />{label}</span>
+                    <div className="col-span-3"><NumInput value={rep.aging[key]?.mbs} prefix="₹" testid={`rep-${i}-${key}-mbs`} onChange={(v) => update((f) => (f.reps[i].aging[key].mbs = v))} /></div>
+                    <div className="col-span-3"><NumInput value={rep.aging[key]?.mcorp} prefix="₹" testid={`rep-${i}-${key}-mcorp`} onChange={(v) => update((f) => (f.reps[i].aging[key].mcorp = v))} /></div>
+                    <div className="col-span-4 text-center font-mono tabular-nums text-sm font-semibold" style={{ color }} data-testid={`rep-${i}-${key}-total`}>{formatINR(tot)}</div>
+                  </div>
+                );
+              })}
+              {(() => {
+                const tot = rep.aging.d15?.mcorp || 0;
+                return (
+                  <div className="grid grid-cols-12 gap-3 items-center rounded-md border border-border/60 bg-secondary/20 px-3 py-2">
+                    <span className="col-span-2 flex items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: "#0EA5E9" }} />15 Days</span>
+                    <div className="col-span-3 h-9 rounded-md border border-dashed border-border flex items-center justify-center text-xs text-muted-foreground select-none">{companyA} n/a</div>
+                    <div className="col-span-3"><NumInput value={rep.aging.d15?.mcorp} prefix="₹" testid={`rep-${i}-d15-mcorp`} onChange={(v) => update((f) => (f.reps[i].aging.d15.mcorp = v))} /></div>
+                    <div className="col-span-4 text-center font-mono tabular-nums text-sm font-semibold text-[#0EA5E9]" data-testid={`rep-${i}-d15-total`}>{formatINR(tot)}</div>
+                  </div>
+                );
+              })()}
+              {(() => {
+                const keys = ["d90", "d60", "d30", "d15", "othera"];
+                const sumMbs = keys.reduce((s, k) => s + (rep.aging[k]?.mbs || 0), 0);
+                const sumMcorp = keys.reduce((s, k) => s + (rep.aging[k]?.mcorp || 0), 0);
+                return (
+                  <div className="grid grid-cols-12 gap-3 items-center rounded-md border-2 border-foreground/80 bg-foreground text-background px-3 py-2.5" data-testid={`rep-${i}-aging-sum-row`}>
+                    <span className="col-span-2 text-[11px] font-semibold uppercase tracking-wider">All Buckets</span>
+                    <div className="col-span-3 text-center font-mono tabular-nums text-sm font-semibold" data-testid={`rep-${i}-aging-sum-mbs`}>{formatINR(sumMbs)}</div>
+                    <div className="col-span-3 text-center font-mono tabular-nums text-sm font-semibold" data-testid={`rep-${i}-aging-sum-mcorp`}>{formatINR(sumMcorp)}</div>
+                    <div className="col-span-4 text-center font-mono tabular-nums text-base font-bold" data-testid={`rep-${i}-aging-sum-total`}>{formatINR(sumMbs + sumMcorp)}</div>
+                  </div>
+                );
+              })()}
             </div>
             <Separator className="my-4" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
@@ -395,23 +422,54 @@ export default function DataEntry() {
               <div className="space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[#2563EB]">Purchase ({companyA} / {companyB})</div>
                 <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Tons</span><div className="flex-1"><AmountPair value={b.purchase.tons} testidBase={`branch-${i}-purchase-tons`} onChange={(fld, v) => update((f) => (f.branches[i].purchase.tons[fld] = v))} /></div></div>
-                {(() => { const t = (b.purchase?.tons?.mbs || 0) + (b.purchase?.tons?.mcorp || 0); return (
-                  <div className="flex gap-2 pl-[60px]">
-                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</div><div className="font-mono text-sm text-[#2563EB]" data-testid={`branch-${i}-purchase-total`}>{formatTons(t)}</div></div>
-                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Per Day (÷{WORKING_DAYS})</div><div className="font-mono text-sm text-[#2563EB]/80" data-testid={`branch-${i}-purchase-perday`}>{formatTons(t / WORKING_DAYS)}</div></div>
-                  </div>
-                ); })()}
+                <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Value</span><div className="flex-1"><AmountPair value={b.purchase.value} prefix="₹" testidBase={`branch-${i}-purchase-value`} onChange={(fld, v) => update((f) => (f.branches[i].purchase.value[fld] = v))} /></div></div>
+                {(() => {
+                  const t = (b.purchase?.tons?.mbs || 0) + (b.purchase?.tons?.mcorp || 0);
+                  const v = (b.purchase?.value?.mbs || 0) + (b.purchase?.value?.mcorp || 0);
+                  return (
+                    <div className="flex gap-2 pl-[60px]">
+                      <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</div><div className="font-mono text-sm text-[#2563EB]" data-testid={`branch-${i}-purchase-total`}>{formatTons(t)}</div></div>
+                      <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Per Day (÷{WORKING_DAYS})</div><div className="font-mono text-sm text-[#2563EB]/80" data-testid={`branch-${i}-purchase-perday`}>{formatTons(t / WORKING_DAYS)}</div></div>
+                      <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total Value</div><div className="font-mono text-sm text-[#2563EB]" data-testid={`branch-${i}-purchase-value-total`}>{formatINR(v)}</div></div>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="space-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[#16A34A]">Sales ({companyA} / {companyB})</div>
                 <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Tons</span><div className="flex-1"><AmountPair value={b.sales.tons} testidBase={`branch-${i}-sales-tons`} onChange={(fld, v) => update((f) => (f.branches[i].sales.tons[fld] = v))} /></div></div>
-                {(() => { const t = (b.sales?.tons?.mbs || 0) + (b.sales?.tons?.mcorp || 0); return (
-                  <div className="flex gap-2 pl-[60px]">
-                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</div><div className="font-mono text-sm text-[#16A34A]" data-testid={`branch-${i}-sales-total`}>{formatTons(t)}</div></div>
-                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Per Day (÷{WORKING_DAYS})</div><div className="font-mono text-sm text-[#16A34A]/80" data-testid={`branch-${i}-sales-perday`}>{formatTons(t / WORKING_DAYS)}</div></div>
-                  </div>
-                ); })()}
+                <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Value</span><div className="flex-1"><AmountPair value={b.sales.value} prefix="₹" testidBase={`branch-${i}-sales-value`} onChange={(fld, v) => update((f) => (f.branches[i].sales.value[fld] = v))} /></div></div>
+                {(() => {
+                  const t = (b.sales?.tons?.mbs || 0) + (b.sales?.tons?.mcorp || 0);
+                  const v = (b.sales?.value?.mbs || 0) + (b.sales?.value?.mcorp || 0);
+                  return (
+                    <div className="flex gap-2 pl-[60px]">
+                      <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total</div><div className="font-mono text-sm text-[#16A34A]" data-testid={`branch-${i}-sales-total`}>{formatTons(t)}</div></div>
+                      <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Per Day (÷{WORKING_DAYS})</div><div className="font-mono text-sm text-[#16A34A]/80" data-testid={`branch-${i}-sales-perday`}>{formatTons(t / WORKING_DAYS)}</div></div>
+                      <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total Value</div><div className="font-mono text-sm text-[#16A34A]" data-testid={`branch-${i}-sales-value-total`}>{formatINR(v)}</div></div>
+                    </div>
+                  );
+                })()}
               </div>
+            </div>
+
+            <Separator className="my-4" />
+            <div className="space-y-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-[#D97706]">Sales Return ({companyA} / {companyB})</div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-3">
+                <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Amount</span><div className="flex-1"><AmountPair value={b.sales_return?.amount} prefix="₹" testidBase={`branch-${i}-return-amount`} onChange={(fld, v) => update((f) => (f.branches[i].sales_return.amount[fld] = v))} /></div></div>
+                <div className="flex items-center gap-3"><span className="text-xs w-12 text-muted-foreground">Count</span><div className="flex-1"><AmountPair value={b.sales_return?.count} testidBase={`branch-${i}-return-count`} onChange={(fld, v) => update((f) => (f.branches[i].sales_return.count[fld] = v))} /></div></div>
+              </div>
+              {(() => {
+                const a = (b.sales_return?.amount?.mbs || 0) + (b.sales_return?.amount?.mcorp || 0);
+                const c = (b.sales_return?.count?.mbs || 0) + (b.sales_return?.count?.mcorp || 0);
+                return (
+                  <div className="flex gap-2 pl-[60px] max-w-md">
+                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total Amount</div><div className="font-mono text-sm text-[#D97706]" data-testid={`branch-${i}-return-amount-total`}>{formatINR(a)}</div></div>
+                    <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total Count</div><div className="font-mono text-sm text-[#D97706]" data-testid={`branch-${i}-return-count-total`}>{c}</div></div>
+                  </div>
+                );
+              })()}
             </div>
           </Card>
         ))}
@@ -482,17 +540,42 @@ export default function DataEntry() {
             </div>
 
             <div className="mt-4">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-[#16A34A] mb-2">Sales by Branch — Tons ({companyA} / {companyB})</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-[#16A34A] mb-2">Sales by Branch — Tons &amp; Value ({companyA} / {companyB})</div>
               {branchOptions.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Add branches in the &ldquo;Branch Sales &amp; Purchase&rdquo; section above to record branch-wise sales here.</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
-                  {branchOptions.map((bn) => (
-                    <div key={bn} className="flex items-center gap-3">
-                      <span className="text-sm w-28 shrink-0 text-muted-foreground truncate" title={bn}>{bn}</span>
-                      <div className="flex-1"><AmountPair value={getMktBranchSale(m, bn)} testidBase={`marketing-${i}-branchsale-${bn}`} onChange={(fld, v) => setMktBranchSale(i, bn, fld, v)} /></div>
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  <div className="hidden md:grid grid-cols-2 gap-x-8">
+                    {[0, 1].map((c) => (
+                      <div key={c} className="flex items-center gap-3">
+                        <span className="w-28 shrink-0" />
+                        <div className="flex-1 grid grid-cols-2 gap-2 text-[10px] uppercase tracking-wider text-muted-foreground text-center">
+                          <span>Tons ({companyA} / {companyB})</span><span>Value ₹ ({companyA} / {companyB})</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                    {branchOptions.map((bn) => (
+                      <div key={bn} className="flex items-center gap-3">
+                        <span className="text-sm w-28 shrink-0 text-muted-foreground truncate" title={bn}>{bn}</span>
+                        <div className="flex-1 grid grid-cols-2 gap-2">
+                          <AmountPair value={getMktBranchSale(m, bn, "tons")} testidBase={`marketing-${i}-branchsale-${bn}`} onChange={(fld, v) => setMktBranchSale(i, bn, "tons", fld, v)} />
+                          <AmountPair value={getMktBranchSale(m, bn, "value")} prefix="₹" testidBase={`marketing-${i}-branchvalue-${bn}`} onChange={(fld, v) => setMktBranchSale(i, bn, "value", fld, v)} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {(() => {
+                    const tv = (m.branch_sales || []).reduce((s, b) => s + (b.value?.mbs || 0) + (b.value?.mcorp || 0), 0);
+                    const tt = (m.branch_sales || []).reduce((s, b) => s + (b.tons?.mbs || 0) + (b.tons?.mcorp || 0), 0);
+                    return (
+                      <div className="flex gap-2 max-w-md">
+                        <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total Tons</div><div className="font-mono text-sm text-[#16A34A]" data-testid={`marketing-${i}-branchsale-total-tons`}>{formatTons(tt)}</div></div>
+                        <div className="flex-1 rounded-md border border-border px-3 py-1.5 bg-secondary/40"><div className="text-[9px] uppercase tracking-wider text-muted-foreground">Total Value</div><div className="font-mono text-sm text-[#16A34A]" data-testid={`marketing-${i}-branchsale-total-value`}>{formatINR(tv)}</div></div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

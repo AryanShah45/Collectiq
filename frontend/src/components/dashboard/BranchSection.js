@@ -1,10 +1,69 @@
 import { Card } from "@/components/ui/card";
-import { branchRows, formatTons, WORKING_DAYS } from "@/lib/calc";
+import { branchRows, formatTons, formatINR, WORKING_DAYS } from "@/lib/calc";
 import { useAuth } from "@/context/AuthContext";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
-import { Boxes, Truck } from "lucide-react";
+import { Boxes, Truck, Undo2, TrendingUp } from "lucide-react";
+
+// Totals across all branches for one meeting (company-filtered).
+function branchTotals(meeting, company) {
+  return branchRows(meeting, company).reduce(
+    (a, b) => ({
+      purchaseTons: a.purchaseTons + b.purchaseTons,
+      salesTons: a.salesTons + b.salesTons,
+      purchaseValue: a.purchaseValue + b.purchaseValue,
+      salesValue: a.salesValue + b.salesValue,
+      returnAmount: a.returnAmount + b.returnAmount,
+      returnCount: a.returnCount + b.returnCount,
+    }),
+    { purchaseTons: 0, salesTons: 0, purchaseValue: 0, salesValue: 0, returnAmount: 0, returnCount: 0 }
+  );
+}
+
+// Last week vs current week for sales & purchase (tons + rupee value + returns).
+function BranchWowStrip({ meeting, prev, company }) {
+  if (!prev) return null;
+  const cur = branchTotals(meeting, company);
+  const old = branchTotals(prev, company);
+  const items = [
+    { label: "Purchase (Tons)", cur: cur.purchaseTons, diff: cur.purchaseTons - old.purchaseTons, fmt: formatTons, tone: "neutral" },
+    { label: "Sales (Tons)", cur: cur.salesTons, diff: cur.salesTons - old.salesTons, fmt: formatTons, tone: "growth" },
+    { label: "Purchase ₹", cur: cur.purchaseValue, diff: cur.purchaseValue - old.purchaseValue, fmt: formatINR, tone: "neutral" },
+    { label: "Sales ₹", cur: cur.salesValue, diff: cur.salesValue - old.salesValue, fmt: formatINR, tone: "growth" },
+    { label: "Return ₹", cur: cur.returnAmount, diff: cur.returnAmount - old.returnAmount, fmt: formatINR, tone: "inverse" },
+    { label: "Returns (count)", cur: cur.returnCount, diff: cur.returnCount - old.returnCount, fmt: (n) => `${Math.round(n)}`, tone: "inverse" },
+  ];
+  return (
+    <Card className="p-5 shadow-none" data-testid="branch-wow-strip">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Sales &amp; Purchase — Last Week vs This Week</h3>
+        <span className="text-[11px] text-muted-foreground">vs week of {prev.week_label || prev.meeting_date}</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        {items.map((it) => {
+          const dir = it.diff > 0 ? "up" : it.diff < 0 ? "down" : "flat";
+          let color = "text-muted-foreground";
+          if (dir !== "flat") {
+            if (it.tone === "growth") color = dir === "up" ? "text-[#16A34A]" : "text-[#DC2626]";
+            else if (it.tone === "inverse") color = dir === "up" ? "text-[#DC2626]" : "text-[#16A34A]";
+            else color = "text-foreground";
+          }
+          const arrow = dir === "up" ? "▲" : dir === "down" ? "▼" : "•";
+          return (
+            <div key={it.label} className="rounded-md border border-border px-3 py-2.5 bg-secondary/30" data-testid={`branch-wow-${it.label}`}>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{it.label}</div>
+              <div className="font-mono tabular-nums text-sm mt-1">{it.fmt(it.cur)}</div>
+              <div className={`font-mono tabular-nums text-xs mt-0.5 ${color}`}>
+                {arrow} {it.fmt(Math.abs(it.diff))} <span className="text-muted-foreground font-sans">vs last wk</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
 
 function DirectSaleCard({ rows, companyA, companyB }) {
   const ds = rows.find((b) => {
@@ -52,7 +111,7 @@ function DirectSaleCard({ rows, companyA, companyB }) {
   );
 }
 
-export default function BranchSection({ meeting, company }) {
+export default function BranchSection({ meeting, prev, company }) {
   const { companyA, companyB } = useAuth();
   const rows = branchRows(meeting, company);
 
@@ -66,8 +125,10 @@ export default function BranchSection({ meeting, company }) {
     (a, b) => ({
       pt: a.pt + b.purchaseTons, st: a.st + b.salesTons,
       ppd: a.ppd + b.purchasePerDay, spd: a.spd + b.salesPerDay,
+      pv: a.pv + b.purchaseValue, sv: a.sv + b.salesValue,
+      ra: a.ra + b.returnAmount, rc: a.rc + b.returnCount,
     }),
-    { pt: 0, st: 0, ppd: 0, spd: 0 }
+    { pt: 0, st: 0, ppd: 0, spd: 0, pv: 0, sv: 0, ra: 0, rc: 0 }
   );
 
   const tip = ({ active, payload, label }) => {
@@ -87,6 +148,7 @@ export default function BranchSection({ meeting, company }) {
 
   return (
     <div className="space-y-6" data-testid="branch-section">
+      <BranchWowStrip meeting={meeting} prev={prev} company={company} />
       <DirectSaleCard rows={rows} companyA={companyA} companyB={companyB} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -112,7 +174,7 @@ export default function BranchSection({ meeting, company }) {
 
         <Card className="p-0 shadow-none overflow-hidden">
           <div className="p-6 pb-3"><h3 className="text-base font-medium">Branch Detail</h3>
-            <p className="text-xs text-muted-foreground mt-1">Purchase &amp; Sales (Tons) · per-day = ÷ {WORKING_DAYS} working days</p></div>
+            <p className="text-xs text-muted-foreground mt-1">Purchase &amp; Sales (Tons + ₹ Value) · per-day = ÷ {WORKING_DAYS} working days</p></div>
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse">
               <thead>
@@ -120,8 +182,10 @@ export default function BranchSection({ meeting, company }) {
                   <th className="text-left px-4 py-2">Branch</th>
                   <th className="px-3 py-2">Purchase</th>
                   <th className="px-3 py-2">Pur/Day</th>
+                  <th className="px-3 py-2">Pur ₹</th>
                   <th className="px-3 py-2">Sales</th>
                   <th className="px-3 py-2">Sale/Day</th>
+                  <th className="px-3 py-2">Sales ₹</th>
                 </tr>
               </thead>
               <tbody>
@@ -130,8 +194,10 @@ export default function BranchSection({ meeting, company }) {
                     <td className="text-left px-4 py-2.5 text-sm font-medium">{b.name}</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]">{formatTons(b.purchaseTons)}</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]/70">{formatTons(b.purchasePerDay)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[#2563EB]">{formatINR(b.purchaseValue)}</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]">{formatTons(b.salesTons)}</td>
                     <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]/70">{formatTons(b.salesPerDay)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-[#16A34A]">{formatINR(b.salesValue)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -140,14 +206,53 @@ export default function BranchSection({ meeting, company }) {
                   <td className="text-left px-4 py-2.5 text-xs uppercase tracking-wider">Total</td>
                   <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.pt)}</td>
                   <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.ppd)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{formatINR(totals.pv)}</td>
                   <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.st)}</td>
                   <td className="px-3 py-2.5 font-mono text-xs">{formatTons(totals.spd)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{formatINR(totals.sv)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         </Card>
       </div>
+
+      <Card className="p-0 shadow-none overflow-hidden" data-testid="sales-return-card">
+        <div className="p-6 pb-3">
+          <h3 className="text-base font-medium flex items-center gap-2"><Undo2 className="h-4 w-4" /> Sales Return</h3>
+          <p className="text-xs text-muted-foreground mt-1">Returned goods by branch — amount (₹) and number of returns, {companyA} / {companyB}</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right border-collapse">
+            <thead>
+              <tr className="border-y border-border bg-secondary/50 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <th className="text-left px-4 py-2">Branch</th>
+                <th className="px-3 py-2">Return ₹</th>
+                <th className="px-3 py-2">Returns (count)</th>
+                <th className="px-3 py-2 bg-secondary/80">% of Sales ₹</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((b) => (
+                <tr key={b.name} className="border-b border-border hover:bg-secondary/30" data-testid={`return-row-${b.name}`}>
+                  <td className="text-left px-4 py-2.5 text-sm font-medium">{b.name}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-[#D97706]">{formatINR(b.returnAmount)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">{b.returnCount}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs bg-secondary/40">{b.salesValue ? `${((b.returnAmount / b.salesValue) * 100).toFixed(1)}%` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-black bg-secondary/60 font-semibold">
+                <td className="text-left px-4 py-2.5 text-xs uppercase tracking-wider">Total</td>
+                <td className="px-3 py-2.5 font-mono text-xs">{formatINR(totals.ra)}</td>
+                <td className="px-3 py-2.5 font-mono text-xs">{totals.rc}</td>
+                <td className="px-3 py-2.5 font-mono text-xs bg-secondary/40">{totals.sv ? `${((totals.ra / totals.sv) * 100).toFixed(1)}%` : "—"}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }

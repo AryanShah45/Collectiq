@@ -10,7 +10,8 @@ from fpdf.fonts import FontFace
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-BUCKETS = [("d90", "90 Days"), ("d60", "60 Days"), ("d30", "30 Days"), ("othera", "Other")]
+BUCKETS = [("d90", "90 Days"), ("d60", "60 Days"), ("d30", "30 Days"),
+           ("d15", "15 Days"), ("othera", "Other")]
 
 _HEADINGS = FontFace(emphasis="BOLD", color=(0, 0, 0), fill_color=(235, 235, 235))
 
@@ -31,15 +32,30 @@ def _amt(a):
     return (a.get("mbs", 0) or 0), (a.get("mcorp", 0) or 0)
 
 
+def _inr_group(n):
+    """Indian digit grouping: 20680000 -> 2,06,80,000."""
+    s = f"{abs(n):.0f}"
+    if len(s) > 3:
+        head, tail = s[:-3], s[-3:]
+        parts = []
+        while len(head) > 2:
+            parts.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            parts.insert(0, head)
+        s = ",".join(parts + [tail])
+    return s
+
+
 def _inr(n):
     n = float(n or 0)
     sign = "-" if n < 0 else ""
-    n = abs(n)
-    if n >= 1e7:
-        return f"{sign}{n/1e7:.2f} Cr"
-    if n >= 1e5:
-        return f"{sign}{n/1e5:.2f} L"
-    return f"{sign}{n:,.0f}"
+    return f"{sign}{_inr_group(n)}"
+
+
+def _amt_sum2(a):
+    a = a or {}
+    return (a.get("mbs", 0) or 0) + (a.get("mcorp", 0) or 0)
 
 
 # ============================== PDF ==============================
@@ -151,6 +167,37 @@ def build_pdf(meeting: dict, company_a: str, company_b: str) -> bytes:
             for cval in [b.get("name", ""), f"{pm:.2f}", f"{pc:.2f}", f"{pm+pc:.2f}", f"{sm:.2f}", f"{sc:.2f}", f"{sm+sc:.2f}"]:
                 r.cell(_s(cval))
 
+    _section(pdf, "Branch Sales & Purchase Value (Rs)")
+    pdf.set_font("Helvetica", "", 7)
+    with pdf.table(text_align="CENTER", first_row_as_headings=True,
+                   headings_style=_HEADINGS) as table:
+        hr = table.row()
+        for h in ["Branch", f"Purchase {company_a}", company_b, "Total", f"Sales {company_a}", company_b, "Total"]:
+            hr.cell(h)
+        for b in meeting.get("branches", []):
+            pm, pc = _amt(b.get("purchase", {}).get("value"))
+            sm, sc = _amt(b.get("sales", {}).get("value"))
+            r = table.row()
+            for cval in [b.get("name", ""), _inr(pm), _inr(pc), _inr(pm + pc), _inr(sm), _inr(sc), _inr(sm + sc)]:
+                r.cell(_s(cval))
+
+    _section(pdf, "Sales Return")
+    pdf.set_font("Helvetica", "", 7)
+    with pdf.table(text_align="CENTER", first_row_as_headings=True,
+                   headings_style=_HEADINGS) as table:
+        hr = table.row()
+        for h in ["Branch", f"Amount {company_a} (Rs)", f"{company_b} (Rs)", "Total (Rs)",
+                  f"Count {company_a}", company_b, "Total"]:
+            hr.cell(h)
+        for b in meeting.get("branches", []):
+            sr = b.get("sales_return", {}) or {}
+            am, ac = _amt(sr.get("amount"))
+            cm_, cc_ = _amt(sr.get("count"))
+            r = table.row()
+            for cval in [b.get("name", ""), _inr(am), _inr(ac), _inr(am + ac),
+                         f"{cm_:.0f}", f"{cc_:.0f}", f"{cm_+cc_:.0f}"]:
+                r.cell(_s(cval))
+
     # Quotation + Marketing side by side via two sections
     _section(pdf, "Quotation Pipeline")
     q = meeting.get("quotation", {})
@@ -172,16 +219,21 @@ def build_pdf(meeting: dict, company_a: str, company_b: str) -> bytes:
     with pdf.table(text_align="CENTER", first_row_as_headings=True,
                    headings_style=_HEADINGS) as table:
         hr = table.row()
-        for h in ["Person", "Visits", "Inquiries", "Inq. Confirmed", "Order Loss", "Target Tons", "Achieve %"]:
+        for h in ["Person", "Visits", "Inquiries", "Inq. Confirmed", "Order Loss",
+                  "Sales (T)", "Sales Value (Rs)", "Target Tons", "Achieve %"]:
             hr.cell(h)
         for mrep in meeting.get("marketing_reps", []):
             vm, vc = _amt(mrep.get("visit"))
             im, ic = _amt(mrep.get("inquiry"))
             cfm, cfc = _amt(mrep.get("inquiry_conform"))
             lm, lc = _amt(mrep.get("order_loss"))
+            bs = mrep.get("branch_sales", []) or []
+            s_tons = sum(_amt_sum2(x.get("tons")) for x in bs)
+            s_val = sum(_amt_sum2(x.get("value")) for x in bs)
             r = table.row()
             for cval in [mrep.get("name", ""), f"{vm+vc:.0f}", f"{im+ic:.0f}", f"{cfm+cfc:.0f}",
-                         f"{lm+lc:.0f}", f"{mrep.get('target_tons', 0):.0f}", f"{mrep.get('target_tons_achieve_pct', 0):.0f}%"]:
+                         f"{lm+lc:.0f}", f"{s_tons:.2f}", _inr(s_val),
+                         f"{mrep.get('target_tons', 0):.0f}", f"{mrep.get('target_tons_achieve_pct', 0):.0f}%"]:
                 r.cell(_s(cval))
 
     out = pdf.output()
@@ -260,18 +312,37 @@ def build_xlsx(meeting: dict, company_a: str, company_b: str) -> bytes:
     for col in wc.columns:
         wc.column_dimensions[col[0].column_letter].width = 15
 
-    # Branches
+    # Branches (tons + rupee value)
     wbr = wb.create_sheet("Branches")
     bh = ["Branch", f"Purchase {company_a} (T)", f"Purchase {company_b} (T)", "Purchase Total (T)",
-          f"Sales {company_a} (T)", f"Sales {company_b} (T)", "Sales Total (T)"]
+          f"Sales {company_a} (T)", f"Sales {company_b} (T)", "Sales Total (T)",
+          f"Purchase {company_a} (Rs)", f"Purchase {company_b} (Rs)", "Purchase Total (Rs)",
+          f"Sales {company_a} (Rs)", f"Sales {company_b} (Rs)", "Sales Total (Rs)"]
     wbr.append(bh)
     _style_header(wbr, 1, len(bh))
     for b in meeting.get("branches", []):
         pm, pc = _amt(b.get("purchase", {}).get("tons"))
         sm, sc = _amt(b.get("sales", {}).get("tons"))
-        wbr.append([b.get("name", ""), pm, pc, pm + pc, sm, sc, sm + sc])
+        pvm, pvc = _amt(b.get("purchase", {}).get("value"))
+        svm, svc = _amt(b.get("sales", {}).get("value"))
+        wbr.append([b.get("name", ""), pm, pc, pm + pc, sm, sc, sm + sc,
+                    pvm, pvc, pvm + pvc, svm, svc, svm + svc])
     for col in wbr.columns:
         wbr.column_dimensions[col[0].column_letter].width = 18
+
+    # Sales Return
+    wsr = wb.create_sheet("Sales Return")
+    srh = ["Branch", f"Amount {company_a} (Rs)", f"Amount {company_b} (Rs)", "Amount Total (Rs)",
+           f"Count {company_a}", f"Count {company_b}", "Count Total"]
+    wsr.append(srh)
+    _style_header(wsr, 1, len(srh))
+    for b in meeting.get("branches", []):
+        sr = b.get("sales_return", {}) or {}
+        am, ac = _amt(sr.get("amount"))
+        cm2, cc2 = _amt(sr.get("count"))
+        wsr.append([b.get("name", ""), am, ac, am + ac, cm2, cc2, cm2 + cc2])
+    for col in wsr.columns:
+        wsr.column_dimensions[col[0].column_letter].width = 18
 
     # Quotation
     wq = wb.create_sheet("Quotation")
@@ -288,7 +359,8 @@ def build_xlsx(meeting: dict, company_a: str, company_b: str) -> bytes:
     # Marketing
     wm = wb.create_sheet("Marketing")
     mh = ["Person", f"Visits {company_a}", f"Visits {company_b}", "Inquiries", "Inq. Confirmed",
-          "Order Loss", "Target Tons", "Achieve %", "Target Party", "Achieve %"]
+          "Order Loss", "Sales (T)", "Sales Value (Rs)",
+          "Target Tons", "Achieve %", "Target Party", "Achieve %"]
     wm.append(mh)
     _style_header(wm, 1, len(mh))
     for mrep in meeting.get("marketing_reps", []):
@@ -296,7 +368,11 @@ def build_xlsx(meeting: dict, company_a: str, company_b: str) -> bytes:
         im, ic = _amt(mrep.get("inquiry"))
         cfm, cfc = _amt(mrep.get("inquiry_conform"))
         lm, lc = _amt(mrep.get("order_loss"))
+        bs = mrep.get("branch_sales", []) or []
+        s_tons = sum(_amt_sum2(x.get("tons")) for x in bs)
+        s_val = sum(_amt_sum2(x.get("value")) for x in bs)
         wm.append([mrep.get("name", ""), vm, vc, im + ic, cfm + cfc, lm + lc,
+                   round(s_tons, 2), round(s_val, 2),
                    mrep.get("target_tons", 0), mrep.get("target_tons_achieve_pct", 0),
                    mrep.get("target_party", 0), mrep.get("target_party_achieve_pct", 0)])
     for col in wm.columns:

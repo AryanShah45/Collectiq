@@ -42,13 +42,13 @@ export default function AgingChart({ meeting, company }) {
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-medium">Accounts Receivable Aging by Representative</h3>
         </div>
-        <p className="text-xs text-muted-foreground mb-5">Outstanding split across aging buckets (₹ in Crore)</p>
+        <p className="text-xs text-muted-foreground mb-5">Outstanding split across aging buckets (₹)</p>
         <div className="h-[340px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" />
               <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#6B7280" }} tickLine={false} axisLine={{ stroke: "#DEE2E6" }} />
-              <YAxis tickFormatter={formatCr} tick={{ fontSize: 11, fill: "#6B7280", fontFamily: "IBM Plex Mono" }} tickLine={false} axisLine={false} />
+              <YAxis width={92} tickFormatter={formatCr} tick={{ fontSize: 11, fill: "#6B7280", fontFamily: "IBM Plex Mono" }} tickLine={false} axisLine={false} />
               <Tooltip content={<CurrencyTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
               <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="d30" stackId="a" name="30 Days" fill="#2563EB" />
