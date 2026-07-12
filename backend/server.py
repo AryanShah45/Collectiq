@@ -34,9 +34,17 @@ app.include_router(settings_router)
 app.include_router(notion_router)
 
 frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+cors_origins_env = os.environ.get("CORS_ORIGINS", "").strip()
+if cors_origins_env == "*":
+    _allow_origins = ["*"]
+elif cors_origins_env:
+    _allow_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+else:
+    _allow_origins = [frontend_url, "http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url, "http://localhost:3000"],
+    allow_origins=_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
