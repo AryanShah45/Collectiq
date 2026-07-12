@@ -41,5 +41,28 @@ services:
     depends_on:
       - backend
 
+  # Automatic daily database backups: writes a compressed dump to ./backups
+  # every 24 hours and keeps the newest 14. Restore with:
+  #   docker compose run --rm --entrypoint mongorestore backup \
+  #     --host mongo --gzip --drop --archive=/backups/<file>
+  backup:
+    image: mongo:7
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - ./backups:/backups
+    entrypoint:
+      - bash
+      - -c
+      - |
+        while true; do
+          mongodump --host mongo --gzip --archive="/backups/collectiq-$$(date +%F).archive.gz" \
+            && echo "backup written: collectiq-$$(date +%F).archive.gz"
+          ls -1t /backups/collectiq-*.archive.gz 2>/dev/null | tail -n +15 | xargs -r rm --
+          sleep 86400
+        done
+
 volumes:
   mongo_data:

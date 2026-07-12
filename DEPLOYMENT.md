@@ -1,5 +1,30 @@
 # CollectIQ — How to Run It and Put It Live
 
+## ⚡ Fastest path: one command on any Ubuntu server (Hostinger VPS etc.)
+
+On a fresh Ubuntu VPS (Hostinger KVM 1 or similar), the entire setup —
+Docker, the database, security secrets, daily backups, the app itself —
+is one command:
+
+```bash
+git clone https://github.com/AryanShah45/Collectiq.git && cd Collectiq && bash deploy.sh
+```
+
+When it finishes it prints your admin email + a generated password —
+**save them**. Then open `http://YOUR_SERVER_IP:8080`, log in, and create
+accounts for your team from the Users page.
+
+What it sets up for you automatically:
+- **Database**: MongoDB in a container with persistent storage — no Atlas
+  account or manual database setup needed
+- **Daily backups**: a compressed dump written to `./backups` every 24 h
+  (newest 14 kept). Restore with the command printed by the script
+- **Security secrets**: a random `JWT_SECRET` and admin password,
+  stored in `backend/.env` (never committed)
+
+To update the app later: `cd Collectiq && git pull && docker compose up -d --build`
+For a domain + free HTTPS, see "Making it nicer" below.
+
 This guide is written to be followed even if you don't have a technical
 background. Take it one numbered step at a time.
 
