@@ -50,6 +50,10 @@ def _inr(n):
 
 
 def _amt(a):
+    # Tolerate both the current {mbs, mcorp} shape and the legacy plain-number
+    # shape still present in older documents.
+    if isinstance(a, (int, float)):
+        return float(a or 0), 0.0
     a = a or {}
     return (a.get("mbs", 0) or 0), (a.get("mcorp", 0) or 0)
 
