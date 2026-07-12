@@ -63,10 +63,13 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def set_auth_cookies(response: Response, access: str, refresh: str):
+    # Session cookies (no max_age): they vanish when the browser is closed, so
+    # every new browser session starts at the login page. The JWTs inside still
+    # expire on their own schedule as a hard upper bound.
     response.set_cookie("access_token", access, httponly=True, secure=COOKIE_SECURE,
-                        samesite=COOKIE_SAMESITE, max_age=ACCESS_TTL_MIN * 60, path="/")
+                        samesite=COOKIE_SAMESITE, path="/")
     response.set_cookie("refresh_token", refresh, httponly=True, secure=COOKIE_SECURE,
-                        samesite=COOKIE_SAMESITE, max_age=REFRESH_TTL_DAYS * 86400, path="/")
+                        samesite=COOKIE_SAMESITE, path="/")
 
 
 def public_user(user: dict) -> dict:
@@ -207,7 +210,7 @@ async def refresh(request: Request, response: Response):
             raise HTTPException(status_code=401, detail="User not found")
         access = create_access_token(str(user["_id"]), user["email"], user.get("role", "viewer"))
         response.set_cookie("access_token", access, httponly=True, secure=COOKIE_SECURE,
-                            samesite=COOKIE_SAMESITE, max_age=ACCESS_TTL_MIN * 60, path="/")
+                            samesite=COOKIE_SAMESITE, path="/")
         return public_user(user)
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
