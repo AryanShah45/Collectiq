@@ -29,8 +29,17 @@ export default function Meetings() {
 
   const del = useMutation({
     mutationFn: deleteMeeting,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["meetings"] }); toast.success("Meeting deleted"); },
-    onError: () => toast.error("Failed to delete meeting"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["trends"] });
+      toast.success("Meeting deleted");
+    },
+    onError: (e) => {
+      const msg = e?.response?.data?.detail || e?.message || "Failed to delete meeting";
+      toast.error(typeof msg === "string" ? msg : "Failed to delete meeting");
+      // eslint-disable-next-line no-console
+      console.error("Delete meeting failed", e);
+    },
   });
 
   return (

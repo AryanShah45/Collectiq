@@ -37,11 +37,17 @@ function DatePicker({ value, onChange, testid }) {
 }
 
 function NumInput({ value, onChange, testid, prefix }) {
+  const display = value === 0 || value === "0" ? "0" : (value ?? "");
   return (
     <div className="relative">
       {prefix && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">{prefix}</span>}
-      <Input type="number" className={`h-9 font-mono text-sm ${prefix ? "pl-5" : ""}`} value={value ? value : ""}
-             onChange={(e) => onChange(e.target.value === "" ? 0 : parseFloat(e.target.value))} data-testid={testid} placeholder="0" />
+      <Input type="number" className={`h-9 font-mono text-sm ${prefix ? "pl-5" : ""}`} value={display}
+             onChange={(e) => {
+               const v = e.target.value;
+               if (v === "") { onChange(0); return; }
+               const n = parseFloat(v);
+               onChange(Number.isFinite(n) ? n : 0);
+             }} data-testid={testid} placeholder="0" />
     </div>
   );
 }
@@ -186,10 +192,17 @@ export default function DataEntry() {
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["meetings"] });
       qc.invalidateQueries({ queryKey: ["meeting", editId] });
+      qc.invalidateQueries({ queryKey: ["trends"] });
       toast.success(editId ? "Meeting updated" : "Meeting created");
-      navigate(`/?meeting=${res.id}`);
+      const target = res?.id ? `/?meeting=${res.id}` : "/meetings";
+      navigate(target);
     },
-    onError: (e) => toast.error(formatApiError(e.response?.data?.detail) || "Failed to save"),
+    onError: (e) => {
+      const msg = formatApiError(e?.response?.data?.detail) || e?.message || "Failed to save";
+      toast.error(msg);
+      // eslint-disable-next-line no-console
+      console.error("Save meeting failed", e);
+    },
   });
 
   const handleUpload = async (e) => {
