@@ -33,7 +33,7 @@ export const formatTons = (n) => `${(Number(n) || 0).toFixed(2)} T`;
 
 export function meetingKpis(meeting, company) {
   const reps = meeting?.reps || [];
-  let d90 = 0, d60 = 0, d30 = 0, d15 = 0, othera = 0, collected = 0;
+  let d90 = 0, d60 = 0, d30 = 0, d15 = 0, othera = 0, collected = 0, lastTarget = 0;
   reps.forEach((r) => {
     const ag = r.aging || {};
     d90 += amt(ag.d90, company);
@@ -42,6 +42,7 @@ export function meetingKpis(meeting, company) {
     d15 += amt(ag.d15, company);
     othera += amt(ag.othera, company);
     collected += amt(r.weekly_collection, company);
+    lastTarget += r.last_week_target || 0;
   });
   const totalOutstanding = d90 + d60 + d30 + d15 + othera;
   // NEW TARGET = (MBS 90+60+30) + (MCORP 90+60+30+15). d15 is MCORP-only so the
@@ -51,8 +52,10 @@ export function meetingKpis(meeting, company) {
     totalOutstanding, d90, d60, d30, d15, othera,
     collected,
     collPerDay: collected / WORKING_DAYS,
-    collPct: newTarget ? (collected / newTarget) * 100 : 0,
+    // Collection % = total collection (MBS+MCORP) ÷ last week target (sum across reps).
+    collPct: lastTarget ? (collected / lastTarget) * 100 : 0,
     newTarget,
+    lastTarget,
     repCount: reps.length,
     d90Share: totalOutstanding ? d90 / totalOutstanding : 0,
   };
@@ -76,7 +79,8 @@ export function repRows(meeting, company) {
       mcorp: amt(ag.d90, "mcorp") + amt(ag.d60, "mcorp") + amt(ag.d30, "mcorp") + amt(ag.d15, "mcorp") + amt(ag.othera, "mcorp"),
       collected, collectedMbs, collectedMcorp,
       collPerDay: collected / wd,
-      collPct: newTarget ? (collected / newTarget) * 100 : 0,
+      // Collection % = total collection (MBS+MCORP for this rep) ÷ this rep's last week target.
+      collPct: lastTarget ? (collected / lastTarget) * 100 : 0,
       newTarget,
       lastTarget,
       wowDelta: newTarget - lastTarget,
@@ -191,7 +195,7 @@ export function buildInsights(meeting, company) {
     insights.push({
       type: "success",
       title: `${best.name} leads on collection efficiency`,
-      detail: `Collected ${formatINR(best.collected)} this week (${best.collPct.toFixed(1)}% of ${formatINR(best.newTarget)} new target).`,
+      detail: `Collected ${formatINR(best.collected)} this week (${best.collPct.toFixed(1)}% of ${formatINR(best.lastTarget)} last week target).`,
     });
   }
 
@@ -200,7 +204,7 @@ export function buildInsights(meeting, company) {
     insights.push({
       type: "warning",
       title: `${worst.name} has the lowest collection rate`,
-      detail: `Only ${worst.collPct.toFixed(1)}% collected against ${formatINR(worst.newTarget)} new target this week.`,
+      detail: `Only ${worst.collPct.toFixed(1)}% collected against ${formatINR(worst.lastTarget)} last week target.`,
     });
   }
 

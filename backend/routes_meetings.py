@@ -142,7 +142,7 @@ def _rep_new_target(rep: dict) -> float:
 
 
 def _enrich(meeting: dict) -> dict:
-    d90 = d60 = d30 = d15 = other = collected = 0.0
+    d90 = d60 = d30 = d15 = other = collected = last_target_total = 0.0
     for rep in meeting.get("reps", []):
         ag = rep.get("aging", {})
         d90 += _amt_sum(ag.get("d90"))
@@ -151,6 +151,7 @@ def _enrich(meeting: dict) -> dict:
         d15 += _amt_sum(ag.get("d15"))
         other += _amt_sum(ag.get("othera"))
         collected += _amt_sum(rep.get("weekly_collection")) if isinstance(rep.get("weekly_collection"), dict) else (rep.get("weekly_collection", 0) or 0)
+        last_target_total += rep.get("last_week_target", 0) or 0
     total_outstanding = d90 + d60 + d30 + d15 + other
     new_target = d90 + d60 + d30 + d15     # (MBS 90+60+30) + (MCORP 90+60+30+15); excludes OTHER
 
@@ -176,8 +177,10 @@ def _enrich(meeting: dict) -> dict:
         "d90": round(d90, 2), "d60": round(d60, 2), "d30": round(d30, 2),
         "d15": round(d15, 2), "othera": round(other, 2),
         "collected": round(collected, 2),
-        "coll_pct": round(collected / new_target * 100, 2) if new_target else 0,
+        # Collection % = total collection (MBS+MCORP) ÷ last week target (sum across reps).
+        "coll_pct": round(collected / last_target_total * 100, 2) if last_target_total else 0,
         "new_target_total": round(new_target, 2),
+        "last_week_target_total": round(last_target_total, 2),
         "rep_count": len(meeting.get("reps", [])),
         "branch_count": len(meeting.get("branches", [])),
         "marketing_rep_count": len(meeting.get("marketing_reps", [])),
@@ -336,13 +339,14 @@ async def rep_history(name: str, user: dict = Depends(get_current_user)):
         coll = _amt_sum(wc) if isinstance(wc, dict) else (wc or 0)
         out = _rep_total(rep)
         nt = sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30", "d15"))
+        lwt = rep.get("last_week_target", 0) or 0
         series.append({
             "meeting_date": d.get("meeting_date"), "week_label": d.get("week_label", ""),
             "d90": round(_amt_sum(ag.get("d90")), 2), "d60": round(_amt_sum(ag.get("d60")), 2),
             "d30": round(_amt_sum(ag.get("d30")), 2),
             "d15": round(_amt_sum(ag.get("d15")), 2), "othera": round(_amt_sum(ag.get("othera")), 2),
             "outstanding": round(out, 2), "collected": round(coll, 2),
-            "coll_pct": round(coll / nt * 100, 2) if nt else 0,
+            "coll_pct": round(coll / lwt * 100, 2) if lwt else 0,
         })
     return {"name": name, "points": series}
 

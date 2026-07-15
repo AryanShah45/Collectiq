@@ -106,7 +106,7 @@ export default function Dashboard() {
                  delta={mkDelta(k.d90, pk?.d90, { goodWhenDown: true })} />
         <KpiCard testid="kpi-collected" label="Collected This Week" value={formatINR(k.collected)} accent="success" sub={`${formatINR(k.collPerDay)} per day`} icon={HandCoins} delay={0.12}
                  delta={mkDelta(k.collected, pk?.collected)} />
-        <KpiCard testid="kpi-collection-pct" label="Collection %" value={`${k.collPct.toFixed(1)}%`} accent={k.collPct >= 12 ? "success" : k.collPct >= 6 ? "warning" : "danger"} sub="Collected ÷ New Target" icon={Gauge} delay={0.18}
+        <KpiCard testid="kpi-collection-pct" label="Collection %" value={`${k.collPct.toFixed(1)}%`} accent={k.collPct >= 12 ? "success" : k.collPct >= 6 ? "warning" : "danger"} sub="Collected ÷ Last Week Target" icon={Gauge} delay={0.18}
                  delta={mkDelta(k.collPct, pk?.collPct, { fmt: (n) => `${n.toFixed(1)} pts` })} />
       </div>
 

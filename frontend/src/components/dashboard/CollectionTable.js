@@ -17,7 +17,7 @@ export default function CollectionTable({ meeting }) {
 
   const totals = {};
   buckets.forEach((b) => (totals[b.key] = { mbs: 0, mcorp: 0, total: 0 }));
-  let tOutMbs = 0, tOutMcorp = 0, tOut = 0, tColl = 0, tCollMbs = 0, tCollMcorp = 0, tNewTarget = 0;
+  let tOutMbs = 0, tOutMcorp = 0, tOut = 0, tColl = 0, tCollMbs = 0, tCollMcorp = 0, tNewTarget = 0, tLastTarget = 0;
 
   const rows = reps.map((r) => {
     const cells = {};
@@ -35,12 +35,14 @@ export default function CollectionTable({ meeting }) {
     const collMcorp = typeof wc === "number" ? 0 : (wc?.mcorp || 0);
     const coll = typeof wc === "number" ? wc : collMbs + collMcorp;
     const wd = r.working_days || WORKING_DAYS;
+    const lastTarget = r.last_week_target || 0;
     tOutMbs += oMbs; tOutMcorp += oMcorp; tOut += out;
-    tColl += coll; tCollMbs += collMbs; tCollMcorp += collMcorp; tNewTarget += newTarget;
+    tColl += coll; tCollMbs += collMbs; tCollMcorp += collMcorp; tNewTarget += newTarget; tLastTarget += lastTarget;
     return {
       name: r.name, cells, oMbs, oMcorp, out, coll, collMbs, collMcorp,
-      newTarget, collPerDay: coll / wd,
-      pct: newTarget ? (coll / newTarget) * 100 : 0,
+      newTarget, lastTarget, collPerDay: coll / wd,
+      // Collection % = MBS+MCORP collected ÷ this rep's last week target.
+      pct: lastTarget ? (coll / lastTarget) * 100 : 0,
     };
   });
 
@@ -137,7 +139,7 @@ export default function CollectionTable({ meeting }) {
               <td className="px-2 py-2.5"><Money v={tCollMcorp} className="text-[#16A34A]" /></td>
               <td className="px-2 py-2.5"><Money v={tColl} className="text-[#16A34A]" /></td>
               <td className="px-3 py-2.5 border-l border-border"><Money v={tColl / WORKING_DAYS} className="text-[#16A34A]" /></td>
-              <td className="px-3 py-2.5 border-l border-border"><span className="font-mono text-xs">{tNewTarget ? ((tColl / tNewTarget) * 100).toFixed(1) : 0}%</span></td>
+              <td className="px-3 py-2.5 border-l border-border"><span className="font-mono text-xs">{tLastTarget ? ((tColl / tLastTarget) * 100).toFixed(1) : 0}%</span></td>
             </tr>
           </tfoot>
         </table>
