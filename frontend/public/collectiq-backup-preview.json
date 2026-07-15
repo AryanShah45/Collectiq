@@ -1,0 +1,369 @@
+{
+  "app": "CollectIQ",
+  "version": 1,
+  "exported_at": "2026-07-15T11:54:42.892181+00:00",
+  "settings": {
+    "id": "app",
+    "company_a": "MBS",
+    "company_b": "MCORP",
+    "collection_reps": [
+      "Arun",
+      "Ghanshyam",
+      "Roni",
+      "Pritesh",
+      "Pankaj"
+    ],
+    "marketing_reps": [
+      "Mihir",
+      "Hitesh",
+      "Ghanshyam"
+    ],
+    "branches": [
+      "Udhana",
+      "Sachin",
+      "Kadodara",
+      "Ankleshwar"
+    ],
+    "updated_at": "2026-07-15T11:41:49.446734+00:00"
+  },
+  "meetings": [
+    {
+      "title": "Weekly Collection Meeting",
+      "meeting_date": "2026-07-15",
+      "period_start": "2026-07-04",
+      "period_end": "2026-07-10",
+      "notes": "",
+      "reps": [
+        {
+          "name": "Arun",
+          "aging": {
+            "d90": {
+              "mbs": 3286677.0,
+              "mcorp": 457575.0
+            },
+            "d60": {
+              "mbs": 4618511.0,
+              "mcorp": 1649982.0
+            },
+            "d30": {
+              "mbs": 7681394.0,
+              "mcorp": 2937314.0
+            },
+            "d15": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "othera": {
+              "mbs": 8979451.0,
+              "mcorp": 6313887.0
+            }
+          },
+          "weekly_collection": {
+            "mbs": 1909273.0,
+            "mcorp": 1135150.0
+          },
+          "last_week_target": 19299990.0,
+          "working_days": 6
+        },
+        {
+          "name": "Ghanshyam",
+          "aging": {
+            "d90": {
+              "mbs": 18294213.0,
+              "mcorp": 644300.0
+            },
+            "d60": {
+              "mbs": 12890051.0,
+              "mcorp": 379296.0
+            },
+            "d30": {
+              "mbs": 13713898.0,
+              "mcorp": 368514.0
+            },
+            "d15": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "othera": {
+              "mbs": 18836874.0,
+              "mcorp": 1568027.0
+            }
+          },
+          "weekly_collection": {
+            "mbs": 4358314.0,
+            "mcorp": 422905.0
+          },
+          "last_week_target": 47900000.0,
+          "working_days": 6
+        },
+        {
+          "name": "Pritesh",
+          "aging": {
+            "d90": {
+              "mbs": 7716051.0,
+              "mcorp": 1083041.0
+            },
+            "d60": {
+              "mbs": 2020684.0,
+              "mcorp": 442797.0
+            },
+            "d30": {
+              "mbs": 17152075.0,
+              "mcorp": 51879.0
+            },
+            "d15": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "othera": {
+              "mbs": 14829552.0,
+              "mcorp": 212103.0
+            }
+          },
+          "weekly_collection": {
+            "mbs": 5211271.0,
+            "mcorp": 0.0
+          },
+          "last_week_target": 28900000.0,
+          "working_days": 6
+        },
+        {
+          "name": "Roni",
+          "aging": {
+            "d90": {
+              "mbs": 11053166.0,
+              "mcorp": 2268884.0
+            },
+            "d60": {
+              "mbs": 1813566.0,
+              "mcorp": 2127953.0
+            },
+            "d30": {
+              "mbs": 6296911.0,
+              "mcorp": 6869976.0
+            },
+            "d15": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "othera": {
+              "mbs": 8200089.0,
+              "mcorp": 8677774.0
+            }
+          },
+          "weekly_collection": {
+            "mbs": 1395438.0,
+            "mcorp": 686439.0
+          },
+          "last_week_target": 26900000.0,
+          "working_days": 6
+        },
+        {
+          "name": "Pankaj",
+          "aging": {
+            "d90": {
+              "mbs": 1189694.0,
+              "mcorp": 127189.0
+            },
+            "d60": {
+              "mbs": 1467590.0,
+              "mcorp": 1267099.0
+            },
+            "d30": {
+              "mbs": 2830682.0,
+              "mcorp": 3146889.0
+            },
+            "d15": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "othera": {
+              "mbs": 9382320.0,
+              "mcorp": 3379691.0
+            }
+          },
+          "weekly_collection": {
+            "mbs": 529370.0,
+            "mcorp": 604625.0
+          },
+          "last_week_target": 8800000.0,
+          "working_days": 6
+        }
+      ],
+      "branches": [
+        {
+          "name": "Udhana",
+          "purchase": {
+            "tons": {
+              "mbs": 0.665,
+              "mcorp": 0.0
+            },
+            "value": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          },
+          "sales": {
+            "tons": {
+              "mbs": 7.581,
+              "mcorp": 0.196
+            },
+            "value": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          },
+          "sales_return": {
+            "amount": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "count": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          }
+        },
+        {
+          "name": "Sachin",
+          "purchase": {
+            "tons": {
+              "mbs": 7.9,
+              "mcorp": 6.663
+            },
+            "value": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          },
+          "sales": {
+            "tons": {
+              "mbs": 30.301,
+              "mcorp": 11.879
+            },
+            "value": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          },
+          "sales_return": {
+            "amount": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "count": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          }
+        },
+        {
+          "name": "Ankleshwar",
+          "purchase": {
+            "tons": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "value": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          },
+          "sales": {
+            "tons": {
+              "mbs": 42.0,
+              "mcorp": 0.0
+            },
+            "value": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          },
+          "sales_return": {
+            "amount": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "count": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          }
+        },
+        {
+          "name": "Kadodara",
+          "purchase": {
+            "tons": {
+              "mbs": 57.213,
+              "mcorp": 3.813
+            },
+            "value": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          },
+          "sales": {
+            "tons": {
+              "mbs": 22.505,
+              "mcorp": 7.325
+            },
+            "value": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          },
+          "sales_return": {
+            "amount": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            },
+            "count": {
+              "mbs": 0.0,
+              "mcorp": 0.0
+            }
+          }
+        }
+      ],
+      "quotation": {
+        "prepair": {
+          "mbs": 0.0,
+          "mcorp": 0.0
+        },
+        "conform": {
+          "mbs": 0.0,
+          "mcorp": 0.0
+        },
+        "pending": {
+          "mbs": 0.0,
+          "mcorp": 0.0
+        },
+        "under_process": {
+          "mbs": 0.0,
+          "mcorp": 0.0
+        },
+        "not_conform": {
+          "mbs": 0.0,
+          "mcorp": 0.0
+        }
+      },
+      "marketing_reps": [],
+      "financials": {
+        "sales_value": {
+          "mbs": 0,
+          "mcorp": 0
+        },
+        "purchase_value": {
+          "mbs": 0,
+          "mcorp": 0
+        }
+      },
+      "week_label": "2026-W29",
+      "month": 7,
+      "year": 2026,
+      "id": "1f316aec-ef04-40b4-a89a-633c51211ce5",
+      "created_by": "Aryan",
+      "created_at": "2026-07-15T10:42:27.497467+00:00",
+      "updated_at": "2026-07-15T10:42:27.497467+00:00"
+    }
+  ]
+}
