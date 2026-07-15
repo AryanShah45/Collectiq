@@ -51,9 +51,10 @@ def compute_flags(meeting: dict, prev: dict | None) -> list:
         ag = rep.get("aging", {})
         d90 = _amt_sum(ag.get("d90"))
         out = _rep_total(rep)
-        nt = sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30"))
+        # Collection % = collected ÷ last week target (manually entered per rep).
+        lwt = rep.get("last_week_target", 0) or 0
         coll = _coll(rep)
-        pct = (coll / nt * 100) if nt else 0
+        pct = (coll / lwt * 100) if lwt else 0
 
         prev_rep = prev_reps.get(name.strip().lower())
         if prev_rep:
@@ -66,10 +67,10 @@ def compute_flags(meeting: dict, prev: dict | None) -> list:
                 flags.append({"severity": "medium", "title": f"{name}: outstanding climbing",
                               "detail": f"Total outstanding up from {_inr(prev_out)} to {_inr(out)}."})
 
-        if nt and pct < 6:
+        if lwt and pct < 6:
             flags.append({"severity": "high", "title": f"{name}: low collection rate",
-                          "detail": f"Collected only {pct:.1f}% of the {_inr(nt)} target this week."})
-        elif nt and pct < 12:
+                          "detail": f"Collected only {pct:.1f}% of the {_inr(lwt)} last week target."})
+        elif lwt and pct < 12:
             flags.append({"severity": "medium", "title": f"{name}: below target",
                           "detail": f"Collection at {pct:.1f}% (collected {_inr(coll)})."})
 

@@ -383,6 +383,7 @@ export default function DataEntry() {
                 const newTarget = ["d90", "d60", "d30", "d15"].reduce((s, b) => s + (rep.aging[b]?.mbs || 0) + (rep.aging[b]?.mcorp || 0), 0);
                 const coll = (rep.weekly_collection?.mbs || 0) + (rep.weekly_collection?.mcorp || 0);
                 const wd = rep.working_days || 6;
+                const lwt = rep.last_week_target || 0;
                 return (
                   <>
                     <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
@@ -394,8 +395,8 @@ export default function DataEntry() {
                       <div className="font-mono text-sm" data-testid={`rep-${i}-coll-day`}>{formatINR(coll / wd)}</div>
                     </div>
                     <div className="rounded-md border border-border px-3 py-2 bg-secondary/40">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coll %</div>
-                      <div className="font-mono text-sm">{newTarget ? ((coll / newTarget) * 100).toFixed(1) : "0.0"}%</div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coll % (÷ Last Week Target)</div>
+                      <div className="font-mono text-sm" data-testid={`rep-${i}-coll-pct`}>{lwt ? ((coll / lwt) * 100).toFixed(1) : "0.0"}%</div>
                     </div>
                   </>
                 );
