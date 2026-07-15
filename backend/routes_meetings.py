@@ -162,6 +162,9 @@ def _enrich(meeting: dict) -> dict:
         p_val += _amt_sum(b.get("purchase", {}).get("value"))
         s_val += _amt_sum(b.get("sales", {}).get("value"))
 
+    # Collection % is Collected ÷ Last Week Target (aggregated across reps).
+    last_target_total = sum(float(r.get("last_week_target") or 0) for r in meeting.get("reps", []))
+
     # Rupee sales/purchase totals: the report prints these only at company level,
     # so prefer the meeting-level financials block; fall back to per-branch sums.
     fin = meeting.get("financials") or {}
@@ -176,8 +179,9 @@ def _enrich(meeting: dict) -> dict:
         "d90": round(d90, 2), "d60": round(d60, 2), "d30": round(d30, 2),
         "d15": round(d15, 2), "othera": round(other, 2),
         "collected": round(collected, 2),
-        "coll_pct": round(collected / new_target * 100, 2) if new_target else 0,
+        "coll_pct": round(collected / last_target_total * 100, 2) if last_target_total else 0,
         "new_target_total": round(new_target, 2),
+        "last_target_total": round(last_target_total, 2),
         "rep_count": len(meeting.get("reps", [])),
         "branch_count": len(meeting.get("branches", [])),
         "marketing_rep_count": len(meeting.get("marketing_reps", [])),
@@ -336,13 +340,15 @@ async def rep_history(name: str, user: dict = Depends(get_current_user)):
         coll = _amt_sum(wc) if isinstance(wc, dict) else (wc or 0)
         out = _rep_total(rep)
         nt = sum(_amt_sum(ag.get(b)) for b in ("d90", "d60", "d30", "d15"))
+        lwt = float(rep.get("last_week_target") or 0)
         series.append({
             "meeting_date": d.get("meeting_date"), "week_label": d.get("week_label", ""),
             "d90": round(_amt_sum(ag.get("d90")), 2), "d60": round(_amt_sum(ag.get("d60")), 2),
             "d30": round(_amt_sum(ag.get("d30")), 2),
             "d15": round(_amt_sum(ag.get("d15")), 2), "othera": round(_amt_sum(ag.get("othera")), 2),
             "outstanding": round(out, 2), "collected": round(coll, 2),
-            "coll_pct": round(coll / nt * 100, 2) if nt else 0,
+            "last_week_target": round(lwt, 2), "new_target": round(nt, 2),
+            "coll_pct": round(coll / lwt * 100, 2) if lwt else 0,
         })
     return {"name": name, "points": series}
 

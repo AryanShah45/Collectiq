@@ -33,7 +33,7 @@ export const formatTons = (n) => `${(Number(n) || 0).toFixed(2)} T`;
 
 export function meetingKpis(meeting, company) {
   const reps = meeting?.reps || [];
-  let d90 = 0, d60 = 0, d30 = 0, d15 = 0, othera = 0, collected = 0;
+  let d90 = 0, d60 = 0, d30 = 0, d15 = 0, othera = 0, collected = 0, lastTarget = 0;
   reps.forEach((r) => {
     const ag = r.aging || {};
     d90 += amt(ag.d90, company);
@@ -42,17 +42,21 @@ export function meetingKpis(meeting, company) {
     d15 += amt(ag.d15, company);
     othera += amt(ag.othera, company);
     collected += amt(r.weekly_collection, company);
+    lastTarget += Number(r.last_week_target) || 0;
   });
   const totalOutstanding = d90 + d60 + d30 + d15 + othera;
   // NEW TARGET = (MBS 90+60+30) + (MCORP 90+60+30+15). d15 is MCORP-only so the
-  // MBS side is always 0. Excludes the OTHER bucket.
+  // MBS side is always 0. Excludes the OTHER bucket. Shown as the target for
+  // NEXT week — not the denominator for Collection %.
   const newTarget = d90 + d60 + d30 + d15;
   return {
     totalOutstanding, d90, d60, d30, d15, othera,
     collected,
     collPerDay: collected / WORKING_DAYS,
-    collPct: newTarget ? (collected / newTarget) * 100 : 0,
+    // Collection % = Collected This Week ÷ Last Week Target × 100
+    collPct: lastTarget ? (collected / lastTarget) * 100 : 0,
     newTarget,
+    lastTarget,
     repCount: reps.length,
     d90Share: totalOutstanding ? d90 / totalOutstanding : 0,
   };
@@ -64,19 +68,21 @@ export function repRows(meeting, company) {
     const d90 = amt(ag.d90, company), d60 = amt(ag.d60, company);
     const d30 = amt(ag.d30, company), d15 = amt(ag.d15, company), othera = amt(ag.othera, company);
     const outstanding = d90 + d60 + d30 + d15 + othera;
-    const newTarget = d90 + d60 + d30 + d15; // (MBS 90+60+30) + (MCORP 90+60+30+15); excludes OTHER
+    const newTarget = d90 + d60 + d30 + d15; // shown as target for NEXT week
     const collected = amt(r.weekly_collection, company);
     const collectedMbs = amt(r.weekly_collection, "mbs");
     const collectedMcorp = amt(r.weekly_collection, "mcorp");
     const wd = r.working_days || WORKING_DAYS;
-    const lastTarget = r.last_week_target || 0;
+    const lastTarget = Number(r.last_week_target) || 0;
     return {
       name: r.name, d90, d60, d30, d15, othera, outstanding,
       mbs: amt(ag.d90, "mbs") + amt(ag.d60, "mbs") + amt(ag.d30, "mbs") + amt(ag.d15, "mbs") + amt(ag.othera, "mbs"),
       mcorp: amt(ag.d90, "mcorp") + amt(ag.d60, "mcorp") + amt(ag.d30, "mcorp") + amt(ag.d15, "mcorp") + amt(ag.othera, "mcorp"),
       collected, collectedMbs, collectedMcorp,
       collPerDay: collected / wd,
-      collPct: newTarget ? (collected / newTarget) * 100 : 0,
+      // Collection % is measured against LAST WEEK'S TARGET (what the rep committed
+      // to collect this week). New Target is the target set for NEXT week.
+      collPct: lastTarget ? (collected / lastTarget) * 100 : 0,
       newTarget,
       lastTarget,
       wowDelta: newTarget - lastTarget,
@@ -191,16 +197,16 @@ export function buildInsights(meeting, company) {
     insights.push({
       type: "success",
       title: `${best.name} leads on collection efficiency`,
-      detail: `Collected ${formatINR(best.collected)} this week (${best.collPct.toFixed(1)}% of ${formatINR(best.newTarget)} new target).`,
+      detail: `Collected ${formatINR(best.collected)} this week (${best.collPct.toFixed(1)}% of ${formatINR(best.lastTarget)} last-week target).`,
     });
   }
 
-  const worst = [...reps].filter((r) => r.outstanding > 0).sort((a, b) => a.collPct - b.collPct)[0];
+  const worst = [...reps].filter((r) => r.outstanding > 0 && r.lastTarget > 0).sort((a, b) => a.collPct - b.collPct)[0];
   if (worst && worst.name !== best?.name) {
     insights.push({
       type: "warning",
       title: `${worst.name} has the lowest collection rate`,
-      detail: `Only ${worst.collPct.toFixed(1)}% collected against ${formatINR(worst.newTarget)} new target this week.`,
+      detail: `Only ${worst.collPct.toFixed(1)}% collected against ${formatINR(worst.lastTarget)} last-week target.`,
     });
   }
 
