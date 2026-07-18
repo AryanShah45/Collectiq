@@ -189,7 +189,11 @@ export default function DataEntry() {
       toast.success(editId ? "Meeting updated" : "Meeting created");
       navigate(`/?meeting=${res.id}`);
     },
-    onError: (e) => toast.error(formatApiError(e.response?.data?.detail) || "Failed to save"),
+    onError: (e) => {
+      const msg = formatApiError(e.response?.data?.detail) || e.message || "Failed to save";
+      toast.error(msg, { duration: 8000 });
+      console.error("Save failed:", e.response?.status, e.response?.data || e.message);
+    },
   });
 
   const handleUpload = async (e) => {
@@ -229,13 +233,24 @@ export default function DataEntry() {
   };
 
   const submit = () => {
-    if (!form.meeting_date) { toast.error("Please select a meeting date"); return; }
-    if (form.reps.some((r) => !r.name.trim())) { toast.error("Every collection rep needs a name"); return; }
+    if (!form.meeting_date) {
+      toast.error("Please select a meeting date", { duration: 6000 });
+      return;
+    }
+    // Silently drop rows the user "added" but never named — matches how
+    // branches / marketing_reps have always been treated. This prevents the
+    // classic "clicked Add Rep, forgot to name it, save does nothing" trap.
+    const cleanReps = form.reps.filter((r) => (r.name || "").trim());
+    if (cleanReps.length === 0) {
+      toast.error("Please add at least one collection rep with a name", { duration: 6000 });
+      return;
+    }
     const branchNames = form.branches.map((b) => (b.name || "").trim()).filter(Boolean);
     const payload = {
       ...form,
-      branches: form.branches.filter((b) => b.name.trim()),
-      marketing_reps: form.marketing_reps.filter((m) => m.name.trim()).map((m) => ({
+      reps: cleanReps,
+      branches: form.branches.filter((b) => (b.name || "").trim()),
+      marketing_reps: form.marketing_reps.filter((m) => (m.name || "").trim()).map((m) => ({
         ...m,
         // keep only branch sales that match a current branch name
         branch_sales: (m.branch_sales || []).filter((bs) => branchNames.includes((bs.name || "").trim())),
