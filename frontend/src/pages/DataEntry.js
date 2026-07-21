@@ -112,15 +112,19 @@ const withDirectSale = (branches) => {
 };
 
 // ---- Week-over-week helpers ----
-// Find the most recent meeting BEFORE `currentDate` (excluding the current
-// meeting being edited). Returns null when there is no prior week.
+// Find the meeting to use as "last week" reference.
+//   • If a meeting_date has been picked -> the most recent PRIOR meeting.
+//   • If no date yet (fresh form)       -> the most recent EXISTING meeting overall.
+//   • Always excludes the meeting currently being edited (editId).
+// This mirrors what the user thinks of as "last week" — the immediately
+// preceding meeting in chronological order, not "any meeting before today".
 function findPreviousMeeting(meetings, currentDate, currentId) {
   if (!meetings || !meetings.length) return null;
-  const target = currentDate || new Date().toISOString().slice(0, 10);
-  const priors = meetings
-    .filter((m) => m.id !== currentId && m.meeting_date && m.meeting_date < target)
-    .sort((a, b) => (a.meeting_date < b.meeting_date ? 1 : -1));
-  return priors[0] || null;
+  const withDate = meetings.filter((m) => m.id !== currentId && m.meeting_date);
+  if (!withDate.length) return null;
+  const sortedDesc = [...withDate].sort((a, b) => (a.meeting_date < b.meeting_date ? 1 : -1));
+  if (!currentDate) return sortedDesc[0] || null;
+  return sortedDesc.find((m) => m.meeting_date < currentDate) || null;
 }
 
 // Given a previous meeting doc and a rep name (case-insensitive match),
@@ -186,28 +190,35 @@ export default function DataEntry() {
     [allMeetings, form.meeting_date, editId],
   );
 
-  // Auto-fill Last Week Target from previous meeting's New Target — ONLY on
-  // create (never touch a value the user has already saved).
-  const autoFilledOnce = useRef(false);
+  // Auto-fill Last Week Target from the previous meeting's per-rep New Target.
+  // Rules:
+  //   • Only on create (never overwrite persisted values in edit mode).
+  //   • Re-fill ALL reps whenever the reference "previous meeting" changes
+  //     (e.g. user picks a different meeting_date — so the comparison is
+  //     always against the correct prior week).
+  //   • Fill freshly-added reps (whose LWT is still 0) even if the reference
+  //     hasn't changed.
+  //   • Preserve any manual edit as long as the user hasn't changed the date.
+  const lastFillSource = useRef(null);
   useEffect(() => {
-    if (editId) return;                     // never overwrite persisted values
-    if (!previousMeeting) return;           // no prior data available yet
-    if (autoFilledOnce.current) return;     // only run once per fresh form
-    // Wait until roster has been applied so all rep rows exist.
+    if (editId) return;
+    if (!previousMeeting) return;
     if (!form.reps || !form.reps.length) return;
-    let touched = false;
-    setForm((prev) => {
-      const next = structuredClone(prev);
+    const srcId = previousMeeting.id;
+    const sourceChanged = lastFillSource.current !== srcId;
+    setForm((prevForm) => {
+      const next = structuredClone(prevForm);
       next.reps = next.reps.map((r) => {
-        if ((r.last_week_target || 0) > 0) return r; // user typed something — leave it
         const info = prevRepInfo(previousMeeting, r.name);
         if (!info || info.newTarget <= 0) return r;
-        touched = true;
-        return { ...r, last_week_target: Math.round(info.newTarget) };
+        if (sourceChanged || (Number(r.last_week_target) || 0) === 0) {
+          return { ...r, last_week_target: Math.round(info.newTarget) };
+        }
+        return r;
       });
       return next;
     });
-    if (touched) autoFilledOnce.current = true;
+    lastFillSource.current = srcId;
   }, [previousMeeting, form.reps.length, editId]);
 
   // For a NEW meeting, pre-fill a row for each name on the roster (once).
