@@ -166,6 +166,48 @@ function WowChip({ prev, curr, testid }) {
   );
 }
 
+// Today's date in YYYY-MM-DD (user's local timezone) — used when the user
+// hits Save without picking a meeting date and for the auto-save fallback.
+const todayISO = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+// Draft persistence — keeps the in-progress form in localStorage so the user
+// never loses work on a refresh, network hiccup or a validation error.
+const DRAFT_VERSION = 2;
+const draftKey = (editId) => `collectiq:dataentry:v${DRAFT_VERSION}:${editId || "new"}`;
+const readDraft = (editId) => {
+  try {
+    const raw = localStorage.getItem(draftKey(editId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.form) return parsed;
+  } catch { /* ignore */ }
+  return null;
+};
+const writeDraft = (editId, form) => {
+  try { localStorage.setItem(draftKey(editId), JSON.stringify({ form, savedAt: Date.now() })); } catch { /* ignore */ }
+};
+const clearDraft = (editId) => {
+  try { localStorage.removeItem(draftKey(editId)); } catch { /* ignore */ }
+};
+
+// Short "n s ago" / "n min ago" for the auto-save status text.
+const timeAgo = (ts, now = Date.now()) => {
+  if (!ts) return "";
+  const s = Math.max(0, Math.floor((now - ts) / 1000));
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
+};
+
 export default function DataEntry() {
   const [params] = useSearchParams();
   const editId = params.get("id");
@@ -176,6 +218,22 @@ export default function DataEntry() {
   const rosterApplied = useRef(false);
   const [form, setForm] = useState(blankForm());
   const [uploading, setUploading] = useState(false);
+  // Draft persistence + auto-save state
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [lastDraftAt, setLastDraftAt] = useState(null);
+  const [lastAutoSaveAt, setLastAutoSaveAt] = useState(null);
+  // Once the first auto-save (or manual save that stays on the page) creates
+  // a meeting, we remember its id so subsequent auto-saves UPDATE it instead
+  // of creating new duplicate meetings on every idle cycle.
+  const [autoCreatedId, setAutoCreatedId] = useState(null);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [autoSaveStatus, setAutoSaveStatus] = useState("idle"); // idle | saving | saved | error
+  const [nowTick, setNowTick] = useState(Date.now()); // re-renders "x s ago" every 5s
+
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, []);
 
   const { data: existing, isLoading } = useQuery({ queryKey: ["meeting", editId], queryFn: () => getMeeting(editId), enabled: !!editId });
 
@@ -266,6 +324,22 @@ export default function DataEntry() {
 
   const update = (mutator) => setForm((prev) => { const next = structuredClone(prev); mutator(next); return next; });
 
+  // Build the exact JSON payload the backend expects, cleaning empty rows.
+  // Defined here (above the mutations) so the auto-save effect can reuse it.
+  const buildPayload = (source = form) => {
+    const cleanReps = source.reps.filter((r) => (r.name || "").trim());
+    const branchNames = source.branches.map((b) => (b.name || "").trim()).filter(Boolean);
+    return {
+      ...source,
+      reps: cleanReps,
+      branches: source.branches.filter((b) => (b.name || "").trim()),
+      marketing_reps: source.marketing_reps.filter((m) => (m.name || "").trim()).map((m) => ({
+        ...m,
+        branch_sales: (m.branch_sales || []).filter((bs) => branchNames.includes((bs.name || "").trim())),
+      })),
+    };
+  };
+
   // marketing branch-sales helpers (sales tons + rupee value per branch, per company)
   const getMktBranchSale = (m, branchName, measure = "tons") =>
     (m.branch_sales || []).find((x) => x.name === branchName)?.[measure] || { mbs: 0, mcorp: 0 };
@@ -283,15 +357,108 @@ export default function DataEntry() {
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["meetings"] });
       qc.invalidateQueries({ queryKey: ["meeting", editId] });
+      // Only clear the draft once the backend actually accepted the payload.
+      clearDraft(editId);
+      clearDraft(null); // also clear the "new" draft if this was a POST → id
       toast.success(editId ? "Meeting updated" : "Meeting created");
       navigate(`/?meeting=${res.id}`);
     },
     onError: (e) => {
       const msg = formatApiError(e.response?.data?.detail) || e.message || "Failed to save";
-      toast.error(msg, { duration: 8000 });
+      toast.error(msg + " — your data is safe (auto-saved locally).", { duration: 8000 });
+      setAutoSaveStatus("error");
       console.error("Save failed:", e.response?.status, e.response?.data || e.message);
     },
   });
+
+  // Silent auto-save (no toast, no navigation). Used by the 10-second idle
+  // timer. If it fails we keep the local draft and let the user retry manually.
+  //
+  // • On the FIRST auto-save of a fresh new meeting we POST once, then
+  //   remember the new id in `autoCreatedId` so subsequent 10-second cycles
+  //   turn into PUTs against that same meeting — no duplicate creation.
+  const autoSave = useMutation({
+    mutationFn: (payload) => {
+      const target = editId || autoCreatedId;
+      return target ? updateMeeting(target, payload) : createMeeting(payload);
+    },
+    onSuccess: (res) => {
+      if (!editId && !autoCreatedId && res?.id) {
+        setAutoCreatedId(res.id);
+        // Reflect the new id in the URL so a manual refresh keeps context,
+        // without unmounting the current form (`replace` avoids history bloat).
+        try { window.history.replaceState({}, "", `/data-entry?id=${res.id}`); } catch { /* ignore */ }
+      }
+      setLastAutoSaveAt(Date.now());
+      setAutoSaveStatus("saved");
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      if (editId) qc.invalidateQueries({ queryKey: ["meeting", editId] });
+    },
+    onError: (e) => {
+      setAutoSaveStatus("error");
+      console.warn("Auto-save failed (draft still safe in localStorage):", e?.response?.status, e?.response?.data?.detail || e?.message);
+    },
+  });
+
+  // Restore a draft from localStorage on mount.
+  //  • For a NEW meeting: restore before the roster fills — the draft takes priority.
+  //  • For an EDIT: wait until the server copy has loaded, then restore any
+  //    unsaved edits over top of it (so edits survive a crash / refresh).
+  useEffect(() => {
+    if (draftHydrated) return;
+    if (editId && !existing) return;        // wait for server copy
+    const draft = readDraft(editId);
+    if (draft && draft.form) {
+      setForm(draft.form);
+      setLastDraftAt(draft.savedAt || Date.now());
+      if (editId) rosterApplied.current = true; // don't clobber restored data
+      toast.info("Restored your unsaved changes from this device", { duration: 4000 });
+    }
+    setDraftHydrated(true);
+  }, [editId, existing, draftHydrated]);
+
+  // Save the current form to localStorage on every change (debounced 500 ms).
+  // This is the "never lose data" safety net.
+  useEffect(() => {
+    if (!draftHydrated) return;
+    const t = setTimeout(() => {
+      writeDraft(editId, form);
+      setLastDraftAt(Date.now());
+    }, 500);
+    return () => clearTimeout(t);
+  }, [form, draftHydrated, editId]);
+
+  // 10-second idle auto-save to the backend. Only fires when auto-save is
+  // enabled AND the form has at least one named rep with real numbers in it —
+  // this avoids creating a blank meeting the moment the page opens.
+  const autoSaveTimer = useRef(null);
+  const hasMeaningfulData = (f) => (f.reps || []).some((r) => {
+    if (!(r.name || "").trim()) return false;
+    const ag = r.aging || {};
+    // Only aging outstanding or collection numbers count as "meaningful".
+    // Auto-filled Last Week Target on its own must NOT trigger auto-save,
+    // otherwise every fresh page open would create a blank meeting.
+    const bucketSum = ["d90", "d60", "d30", "d15", "othera"].reduce((s, k) => {
+      const c = ag[k] || {}; return s + (Number(c.mbs) || 0) + (Number(c.mcorp) || 0);
+    }, 0);
+    const collSum = (Number(r.weekly_collection?.mbs) || 0) + (Number(r.weekly_collection?.mcorp) || 0);
+    return bucketSum > 0 || collSum > 0;
+  });
+
+  useEffect(() => {
+    if (!autoSaveEnabled || !draftHydrated) return;
+    if (save.isPending || autoSave.isPending) return;
+    if (!hasMeaningfulData(form)) return; // nothing worth persisting yet
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      // Auto-populate the meeting date so auto-save never gets blocked.
+      const workingForm = form.meeting_date ? form : { ...form, meeting_date: todayISO() };
+      if (!form.meeting_date) setForm((f) => ({ ...f, meeting_date: workingForm.meeting_date }));
+      setAutoSaveStatus("saving");
+      autoSave.mutate(buildPayload(workingForm));
+    }, 10000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  }, [form, autoSaveEnabled, draftHydrated, editId, autoCreatedId]);
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -330,29 +497,19 @@ export default function DataEntry() {
   };
 
   const submit = () => {
+    // Auto-populate the meeting date if the user didn't pick one — they
+    // shouldn't be blocked by a required field they forgot to fill.
     if (!form.meeting_date) {
-      toast.error("Please select a meeting date", { duration: 6000 });
-      return;
+      const t = todayISO();
+      setForm((f) => ({ ...f, meeting_date: t }));
+      form.meeting_date = t; // use immediately in this call as well
+      toast.info(`Meeting date auto-set to ${t}. You can change it any time.`, { duration: 4000 });
     }
-    // Silently drop rows the user "added" but never named — matches how
-    // branches / marketing_reps have always been treated. This prevents the
-    // classic "clicked Add Rep, forgot to name it, save does nothing" trap.
-    const cleanReps = form.reps.filter((r) => (r.name || "").trim());
-    if (cleanReps.length === 0) {
+    const payload = buildPayload();
+    if (payload.reps.length === 0) {
       toast.error("Please add at least one collection rep with a name", { duration: 6000 });
       return;
     }
-    const branchNames = form.branches.map((b) => (b.name || "").trim()).filter(Boolean);
-    const payload = {
-      ...form,
-      reps: cleanReps,
-      branches: form.branches.filter((b) => (b.name || "").trim()),
-      marketing_reps: form.marketing_reps.filter((m) => (m.name || "").trim()).map((m) => ({
-        ...m,
-        // keep only branch sales that match a current branch name
-        branch_sales: (m.branch_sales || []).filter((bs) => branchNames.includes((bs.name || "").trim())),
-      })),
-    };
     save.mutate(payload);
   };
 
@@ -369,7 +526,24 @@ export default function DataEntry() {
           <h1 className="text-3xl font-semibold tracking-tighter">{editId ? "Edit Meeting" : "Add Weekly Meeting"}</h1>
           <p className="text-sm text-muted-foreground mt-1">Upload the meeting PDF/Excel to auto-fill, or enter everything manually.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Draft + auto-save status */}
+          <div className="hidden md:flex flex-col items-end text-[11px] leading-tight" data-testid="autosave-status">
+            <div className="flex items-center gap-2">
+              <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                <input type="checkbox" className="h-3.5 w-3.5 accent-black" checked={autoSaveEnabled}
+                       onChange={(e) => setAutoSaveEnabled(e.target.checked)} data-testid="autosave-toggle" />
+                <span className="text-muted-foreground">Auto-save (10s)</span>
+              </label>
+              {autoSave.isPending && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+            </div>
+            <div className="text-muted-foreground text-[10px] mt-0.5">
+              {autoSaveStatus === "saving" && <span data-testid="autosave-state-saving">Saving…</span>}
+              {autoSaveStatus === "saved" && lastAutoSaveAt && <span data-testid="autosave-state-saved">Saved to server {timeAgo(lastAutoSaveAt, nowTick)}</span>}
+              {autoSaveStatus === "error" && <span className="text-[#DC2626]" data-testid="autosave-state-error">Server save failed — draft kept locally</span>}
+              {autoSaveStatus === "idle" && lastDraftAt && <span data-testid="autosave-state-draft">Draft saved locally {timeAgo(lastDraftAt, nowTick)}</span>}
+            </div>
+          </div>
           <Button variant="outline" onClick={() => navigate("/meetings")}>Cancel</Button>
           <Button onClick={submit} disabled={save.isPending} data-testid="save-meeting-button">
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Meeting
