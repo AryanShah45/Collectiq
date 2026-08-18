@@ -244,18 +244,18 @@ export default function DataEntry() {
   const { data: allMeetings } = useQuery({ queryKey: ["meetings"], queryFn: getMeetings });
 
   // Reference "previous meeting" for the WoW comparison + Last-Week-Target
-  // auto-fill. This is **stable** across the session:
-  //   • For a NEW meeting: always the most recent EXISTING meeting overall.
-  //     (Meeting date is auto-set at Save so the form.meeting_date value must
-  //      not influence the comparison — otherwise the numbers would appear to
-  //      "shift" the moment we set a date.)
-  //   • For an EDIT: the most recent meeting strictly before the meeting's
-  //     ORIGINAL stored date (from the server), not the current form value.
+  // auto-fill. Dynamic — always the most-recent meeting strictly BEFORE the
+  // meeting-date the user has entered (so newly-entered data always compares
+  // against genuine last-week data). For an edit, uses the meeting's original
+  // stored date so the reference is stable while the form is open.
   const previousMeeting = useMemo(() => {
     if (!allMeetings) return null;
     if (editId) return findPreviousMeeting(allMeetings, existing?.meeting_date, editId);
-    return findPreviousMeeting(allMeetings, null, null); // stable most-recent
-  }, [allMeetings, editId, existing?.meeting_date]);
+    // For a NEW meeting: use the picked meeting_date if set, otherwise fall
+    // back to the most-recent existing meeting so the reps still get a
+    // meaningful Last Week Target auto-fill BEFORE the user picks a date.
+    return findPreviousMeeting(allMeetings, form.meeting_date || null, null);
+  }, [allMeetings, editId, existing?.meeting_date, form.meeting_date]);
 
   // Auto-fill Last Week Target from the previous meeting's per-rep New Target.
   // Rules:
@@ -471,13 +471,14 @@ export default function DataEntry() {
     if (!autoSaveEnabled || !draftHydrated) return;
     if (save.isPending || autoSave.isPending) return;
     if (!hasMeaningfulData(form)) return; // nothing worth persisting yet
+    // Auto-save is silent — it must never fabricate a meeting date on the
+    // user's behalf. If they haven't picked one, we just wait: the local
+    // draft still keeps every keystroke safe until they Save manually.
+    if (!form.meeting_date) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
-      // Auto-populate the meeting date so auto-save never gets blocked.
-      const workingForm = form.meeting_date ? form : { ...form, meeting_date: todayISO() };
-      if (!form.meeting_date) setForm((f) => ({ ...f, meeting_date: workingForm.meeting_date }));
       setAutoSaveStatus("saving");
-      autoSave.mutate(buildPayload(workingForm));
+      autoSave.mutate(buildPayload(form));
     }, 10000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [form, autoSaveEnabled, draftHydrated, editId, autoCreatedId]);
@@ -519,18 +520,11 @@ export default function DataEntry() {
   };
 
   const submit = () => {
-    // Auto-fill the meeting date + period on Save. These fields are no longer
-    // shown in the UI — the user just types their numbers and hits Save.
-    const patch = {};
-    if (!form.meeting_date) patch.meeting_date = todayISO();
-    if (!form.period_start) {
-      const d = new Date(); d.setDate(d.getDate() - 6);
-      patch.period_start = d.toISOString().slice(0, 10);
-    }
-    if (!form.period_end) patch.period_end = todayISO();
-    if (Object.keys(patch).length) {
-      setForm((f) => ({ ...f, ...patch }));
-      Object.assign(form, patch); // reflect for this submit call
+    // Meeting date is entered manually — do not auto-populate it. This keeps
+    // the user in control of which week the entries belong to.
+    if (!form.meeting_date) {
+      toast.error("Please pick a Meeting Date before saving.", { duration: 6000 });
+      return;
     }
     const payload = buildPayload();
     if (payload.reps.length === 0) {
@@ -598,7 +592,7 @@ export default function DataEntry() {
       {/* Meta */}
       <Card className="p-6 shadow-none">
         <h3 className="text-base font-medium mb-4 flex items-center gap-2"><FileText className="h-4 w-4" /> Meeting Details</h3>
-        <p className="text-[11px] text-muted-foreground mb-3">Enter the meeting date and period range manually — any field you leave blank will be auto-filled with today&rsquo;s date on Save.</p>
+        <p className="text-[11px] text-muted-foreground mb-3">Meeting Date is required — the week-over-week comparison below is calculated against the meeting immediately before this date.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-2"><Label className="text-xs uppercase tracking-wider text-muted-foreground">Meeting Date</Label>
             <DatePicker value={form.meeting_date} onChange={(v) => update((f) => (f.meeting_date = v))} testid="meeting-date-picker" /></div>
