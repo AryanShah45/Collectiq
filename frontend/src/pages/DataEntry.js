@@ -245,16 +245,17 @@ export default function DataEntry() {
 
   // Reference "previous meeting" for the WoW comparison + Last-Week-Target
   // auto-fill. Dynamic — always the most-recent meeting strictly BEFORE the
-  // meeting-date the user has entered (so newly-entered data always compares
-  // against genuine last-week data). For an edit, uses the meeting's original
-  // stored date so the reference is stable while the form is open.
+  // meeting-date the user has entered. Returns null until a date is picked
+  // so the UI never shows a MISLEADING "reference week" that would flip
+  // once the user chooses the correct date.
   const previousMeeting = useMemo(() => {
     if (!allMeetings) return null;
     if (editId) return findPreviousMeeting(allMeetings, existing?.meeting_date, editId);
-    // For a NEW meeting: use the picked meeting_date if set, otherwise fall
-    // back to the most-recent existing meeting so the reps still get a
-    // meaningful Last Week Target auto-fill BEFORE the user picks a date.
-    return findPreviousMeeting(allMeetings, form.meeting_date || null, null);
+    // For a NEW meeting we require the user to pick a date first — no
+    // fallback to "most recent overall" (that was confusing when back-filling
+    // an older week).
+    if (!form.meeting_date) return null;
+    return findPreviousMeeting(allMeetings, form.meeting_date, null);
   }, [allMeetings, editId, existing?.meeting_date, form.meeting_date]);
 
   // Auto-fill Last Week Target from the previous meeting's per-rep New Target.
@@ -469,6 +470,7 @@ export default function DataEntry() {
 
   useEffect(() => {
     if (!autoSaveEnabled || !draftHydrated) return;
+    // Never race a manual save.
     if (save.isPending || autoSave.isPending) return;
     if (!hasMeaningfulData(form)) return; // nothing worth persisting yet
     // Auto-save is silent — it must never fabricate a meeting date on the
@@ -477,11 +479,13 @@ export default function DataEntry() {
     if (!form.meeting_date) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
+      // Double-check the manual save didn't fire in the interim (rare race).
+      if (save.isPending) return;
       setAutoSaveStatus("saving");
       autoSave.mutate(buildPayload(form));
     }, 10000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [form, autoSaveEnabled, draftHydrated, editId, autoCreatedId]);
+  }, [form, autoSaveEnabled, draftHydrated, editId, autoCreatedId, save.isPending, autoSave.isPending]);
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -519,12 +523,24 @@ export default function DataEntry() {
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
     // Meeting date is entered manually — do not auto-populate it. This keeps
     // the user in control of which week the entries belong to.
     if (!form.meeting_date) {
       toast.error("Please pick a Meeting Date before saving.", { duration: 6000 });
       return;
+    }
+    // Cancel any pending auto-save timer so it can't fire concurrently with
+    // this manual save.
+    if (autoSaveTimer.current) { clearTimeout(autoSaveTimer.current); autoSaveTimer.current = null; }
+    // If an auto-save is already IN FLIGHT, wait briefly for it to finish so
+    // we can use its result (autoCreatedId) as the target for a PUT — this
+    // prevents two concurrent POSTs from creating duplicate meetings.
+    if (autoSave.isPending) {
+      toast.info("Finalising auto-save…", { duration: 1500 });
+      for (let i = 0; i < 60 && autoSave.isPending; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
     }
     const payload = buildPayload();
     if (payload.reps.length === 0) {
@@ -634,11 +650,15 @@ export default function DataEntry() {
               <Input value={rep.name} placeholder="Representative name" className="max-w-xs font-medium"
                      onChange={(e) => update((f) => (f.reps[i].name = e.target.value))} data-testid={`rep-name-${i}`} />
               <div className="flex items-center gap-3">
-                {prev && (
+                {prev ? (
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground hidden sm:inline" data-testid={`rep-${i}-prev-week`}>
                     vs {prev.weekLabel}
                   </span>
-                )}
+                ) : (!editId && !form.meeting_date && i === 0 && (
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground hidden sm:inline" data-testid={`rep-${i}-prev-hint`}>
+                    Pick meeting date for comparison
+                  </span>
+                ))}
                 <Button variant="ghost" size="icon" className="text-[#DC2626]" onClick={() => update((f) => f.reps.splice(i, 1))} disabled={form.reps.length === 1} data-testid={`remove-rep-${i}`}><Trash2 className="h-4 w-4" /></Button>
               </div>
             </div>
