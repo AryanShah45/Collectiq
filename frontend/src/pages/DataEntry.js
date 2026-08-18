@@ -243,10 +243,19 @@ export default function DataEntry() {
   // New Target instead of asking the user to type it every week.
   const { data: allMeetings } = useQuery({ queryKey: ["meetings"], queryFn: getMeetings });
 
-  const previousMeeting = useMemo(
-    () => findPreviousMeeting(allMeetings, form.meeting_date, editId),
-    [allMeetings, form.meeting_date, editId],
-  );
+  // Reference "previous meeting" for the WoW comparison + Last-Week-Target
+  // auto-fill. This is **stable** across the session:
+  //   • For a NEW meeting: always the most recent EXISTING meeting overall.
+  //     (Meeting date is auto-set at Save so the form.meeting_date value must
+  //      not influence the comparison — otherwise the numbers would appear to
+  //      "shift" the moment we set a date.)
+  //   • For an EDIT: the most recent meeting strictly before the meeting's
+  //     ORIGINAL stored date (from the server), not the current form value.
+  const previousMeeting = useMemo(() => {
+    if (!allMeetings) return null;
+    if (editId) return findPreviousMeeting(allMeetings, existing?.meeting_date, editId);
+    return findPreviousMeeting(allMeetings, null, null); // stable most-recent
+  }, [allMeetings, editId, existing?.meeting_date]);
 
   // Auto-fill Last Week Target from the previous meeting's per-rep New Target.
   // Rules:
@@ -353,22 +362,35 @@ export default function DataEntry() {
   });
 
   const save = useMutation({
-    mutationFn: (payload) => (editId ? updateMeeting(editId, payload) : createMeeting(payload)),
+    // Manual Save: reuse the id from a prior auto-save so we never accidentally
+    // create a duplicate meeting when the user clicks Save Meeting after the
+    // 10-second auto-save has already POSTed the doc.
+    mutationFn: (payload) => {
+      const target = editId || autoCreatedId;
+      return target ? updateMeeting(target, payload) : createMeeting(payload);
+    },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["meetings"] });
       qc.invalidateQueries({ queryKey: ["meeting", editId] });
       // Only clear the draft once the backend actually accepted the payload.
       clearDraft(editId);
       clearDraft(null); // also clear the "new" draft if this was a POST → id
-      toast.success(editId ? "Meeting updated" : "Meeting created");
+      toast.success(editId || autoCreatedId ? "Meeting updated" : "Meeting created");
       navigate(`/?meeting=${res.id}`);
     },
     onError: (e) => {
       const msg = formatApiError(e.response?.data?.detail) || e.message || "Failed to save";
-      toast.error(msg + " — your data is safe (auto-saved locally).", { duration: 8000 });
+      toast.error(msg + " — your data is safe (auto-saved locally). Auto-save will retry in ~10 s.", { duration: 10000 });
       setAutoSaveStatus("error");
       console.error("Save failed:", e.response?.status, e.response?.data || e.message);
     },
+    retry: (failureCount, error) => {
+      // Retry ONCE on 5xx / network errors only. Do NOT retry on 4xx (bad data).
+      if (failureCount >= 1) return false;
+      const status = error?.response?.status;
+      return !status || status >= 500;
+    },
+    retryDelay: 1500,
   });
 
   // Silent auto-save (no toast, no navigation). Used by the 10-second idle
@@ -497,13 +519,18 @@ export default function DataEntry() {
   };
 
   const submit = () => {
-    // Auto-populate the meeting date if the user didn't pick one — they
-    // shouldn't be blocked by a required field they forgot to fill.
-    if (!form.meeting_date) {
-      const t = todayISO();
-      setForm((f) => ({ ...f, meeting_date: t }));
-      form.meeting_date = t; // use immediately in this call as well
-      toast.info(`Meeting date auto-set to ${t}. You can change it any time.`, { duration: 4000 });
+    // Auto-fill the meeting date + period on Save. These fields are no longer
+    // shown in the UI — the user just types their numbers and hits Save.
+    const patch = {};
+    if (!form.meeting_date) patch.meeting_date = todayISO();
+    if (!form.period_start) {
+      const d = new Date(); d.setDate(d.getDate() - 6);
+      patch.period_start = d.toISOString().slice(0, 10);
+    }
+    if (!form.period_end) patch.period_end = todayISO();
+    if (Object.keys(patch).length) {
+      setForm((f) => ({ ...f, ...patch }));
+      Object.assign(form, patch); // reflect for this submit call
     }
     const payload = buildPayload();
     if (payload.reps.length === 0) {
@@ -571,6 +598,7 @@ export default function DataEntry() {
       {/* Meta */}
       <Card className="p-6 shadow-none">
         <h3 className="text-base font-medium mb-4 flex items-center gap-2"><FileText className="h-4 w-4" /> Meeting Details</h3>
+        <p className="text-[11px] text-muted-foreground mb-3">Enter the meeting date and period range manually — any field you leave blank will be auto-filled with today&rsquo;s date on Save.</p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-2"><Label className="text-xs uppercase tracking-wider text-muted-foreground">Meeting Date</Label>
             <DatePicker value={form.meeting_date} onChange={(v) => update((f) => (f.meeting_date = v))} testid="meeting-date-picker" /></div>
