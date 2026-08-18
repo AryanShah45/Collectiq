@@ -111,20 +111,25 @@ const withDirectSale = (branches) => {
   return list.some((b) => isDirectSale(b.name)) ? list : [...list, emptyBranch("Direct Sale")];
 };
 
+// Reference date for a meeting doc — prefer period_end (the last day of the
+// reporting week) since that's what the user actually cares about; fall back
+// to meeting_date for older docs that don't have a period range.
+const refDate = (m) => m?.period_end || m?.meeting_date || null;
+
 // ---- Week-over-week helpers ----
 // Find the meeting to use as "last week" reference.
-//   • If a meeting_date has been picked -> the most recent PRIOR meeting.
+//   • If a currentDate has been passed -> the most recent PRIOR meeting.
 //   • If no date yet (fresh form)       -> the most recent EXISTING meeting overall.
 //   • Always excludes the meeting currently being edited (editId).
 // This mirrors what the user thinks of as "last week" — the immediately
 // preceding meeting in chronological order, not "any meeting before today".
 function findPreviousMeeting(meetings, currentDate, currentId) {
   if (!meetings || !meetings.length) return null;
-  const withDate = meetings.filter((m) => m.id !== currentId && m.meeting_date);
+  const withDate = meetings.filter((m) => m.id !== currentId && refDate(m));
   if (!withDate.length) return null;
-  const sortedDesc = [...withDate].sort((a, b) => (a.meeting_date < b.meeting_date ? 1 : -1));
+  const sortedDesc = [...withDate].sort((a, b) => (refDate(a) < refDate(b) ? 1 : -1));
   if (!currentDate) return sortedDesc[0] || null;
-  return sortedDesc.find((m) => m.meeting_date < currentDate) || null;
+  return sortedDesc.find((m) => refDate(m) < currentDate) || null;
 }
 
 // Given a previous meeting doc and a rep name (case-insensitive match),
@@ -140,7 +145,7 @@ function prevRepInfo(previousMeeting, name) {
   return {
     d90, d60, d30, d15, othera,
     newTarget: d90 + d60 + d30 + d15,
-    weekLabel: previousMeeting.week_label || previousMeeting.meeting_date || "",
+    weekLabel: previousMeeting.week_label || refDate(previousMeeting) || "",
   };
 }
 
@@ -250,13 +255,13 @@ export default function DataEntry() {
   // once the user chooses the correct date.
   const previousMeeting = useMemo(() => {
     if (!allMeetings) return null;
-    if (editId) return findPreviousMeeting(allMeetings, existing?.meeting_date, editId);
-    // For a NEW meeting we require the user to pick a date first — no
-    // fallback to "most recent overall" (that was confusing when back-filling
-    // an older week).
-    if (!form.meeting_date) return null;
-    return findPreviousMeeting(allMeetings, form.meeting_date, null);
-  }, [allMeetings, editId, existing?.meeting_date, form.meeting_date]);
+    if (editId) return findPreviousMeeting(allMeetings, refDate(existing), editId);
+    // For a NEW meeting we require the user to pick a Period End first — no
+    // fallback (that was confusing when back-filling an older week).
+    const ref = form.period_end || form.period_start;
+    if (!ref) return null;
+    return findPreviousMeeting(allMeetings, ref, null);
+  }, [allMeetings, editId, existing, form.period_end, form.period_start]);
 
   // Auto-fill Last Week Target from the previous meeting's per-rep New Target.
   // Rules:
@@ -476,13 +481,16 @@ export default function DataEntry() {
     // Auto-save is silent — it must never fabricate a meeting date on the
     // user's behalf. If they haven't picked one, we just wait: the local
     // draft still keeps every keystroke safe until they Save manually.
-    if (!form.meeting_date) return;
+    if (!form.period_start || !form.period_end) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       // Double-check the manual save didn't fire in the interim (rare race).
       if (save.isPending) return;
+      // Backend still needs meeting_date — derive from period_end.
+      const workingForm = form.meeting_date ? form : { ...form, meeting_date: form.period_end };
+      if (!form.meeting_date) setForm((f) => ({ ...f, meeting_date: form.period_end }));
       setAutoSaveStatus("saving");
-      autoSave.mutate(buildPayload(form));
+      autoSave.mutate(buildPayload(workingForm));
     }, 10000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [form, autoSaveEnabled, draftHydrated, editId, autoCreatedId, save.isPending, autoSave.isPending]);
@@ -524,11 +532,18 @@ export default function DataEntry() {
   };
 
   const submit = async () => {
-    // Meeting date is entered manually — do not auto-populate it. This keeps
-    // the user in control of which week the entries belong to.
-    if (!form.meeting_date) {
-      toast.error("Please pick a Meeting Date before saving.", { duration: 6000 });
+    // Period range is what the user cares about — meeting_date is now derived
+    // from period_end so we never ask the user for a redundant single date.
+    if (!form.period_start || !form.period_end) {
+      toast.error("Please pick both Period Start and Period End before saving.", { duration: 6000 });
       return;
+    }
+    if (!form.meeting_date) {
+      // Auto-derive meeting_date from period_end so the backend still gets
+      // its required field. This is invisible to the user.
+      const derived = form.period_end;
+      setForm((f) => ({ ...f, meeting_date: derived }));
+      form.meeting_date = derived;
     }
     // Cancel any pending auto-save timer so it can't fire concurrently with
     // this manual save.
@@ -608,10 +623,8 @@ export default function DataEntry() {
       {/* Meta */}
       <Card className="p-6 shadow-none">
         <h3 className="text-base font-medium mb-4 flex items-center gap-2"><FileText className="h-4 w-4" /> Meeting Details</h3>
-        <p className="text-[11px] text-muted-foreground mb-3">Meeting Date is required — the week-over-week comparison below is calculated against the meeting immediately before this date.</p>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-2"><Label className="text-xs uppercase tracking-wider text-muted-foreground">Meeting Date</Label>
-            <DatePicker value={form.meeting_date} onChange={(v) => update((f) => (f.meeting_date = v))} testid="meeting-date-picker" /></div>
+        <p className="text-[11px] text-muted-foreground mb-3">Enter the reporting period (Start &rarr; End). The week-over-week comparison is calculated against the meeting whose Period End is immediately before yours.</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2"><Label className="text-xs uppercase tracking-wider text-muted-foreground">Period Start</Label>
             <DatePicker value={form.period_start} onChange={(v) => update((f) => (f.period_start = v))} testid="period-start-picker" /></div>
           <div className="space-y-2"><Label className="text-xs uppercase tracking-wider text-muted-foreground">Period End</Label>
@@ -654,9 +667,9 @@ export default function DataEntry() {
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground hidden sm:inline" data-testid={`rep-${i}-prev-week`}>
                     vs {prev.weekLabel}
                   </span>
-                ) : (!editId && !form.meeting_date && i === 0 && (
+                ) : (!editId && !(form.period_end || form.period_start) && i === 0 && (
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground hidden sm:inline" data-testid={`rep-${i}-prev-hint`}>
-                    Pick meeting date for comparison
+                    Pick Period Start/End for comparison
                   </span>
                 ))}
                 <Button variant="ghost" size="icon" className="text-[#DC2626]" onClick={() => update((f) => f.reps.splice(i, 1))} disabled={form.reps.length === 1} data-testid={`remove-rep-${i}`}><Trash2 className="h-4 w-4" /></Button>
